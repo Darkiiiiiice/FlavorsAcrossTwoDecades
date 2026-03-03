@@ -5549,6 +5549,1431 @@ PATCH /api/v1/saves/:id/recipes/:recipe_id/price
 | **信任度** | 高信任度可解锁"自动迭代"模式，盼盼自行连续实验 |
 | **旅行技能** | 旅行带回更多模糊菜谱，且描述更详细 |
 
+### 6.17 天气系统
+
+天气系统影响客流、种植和特殊事件的触发。
+
+#### 6.17.1 天气类型与效果
+
+```rust
+/// 天气状态
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WeatherState {
+    pub current_weather: Weather,
+    pub forecast: Vec<WeatherForecast>,
+    pub last_update: DateTime<Utc>,
+    pub season: Season,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Weather {
+    Sunny,        // 晴天：客流+10%，后院生长+20%
+    Cloudy,       // 多云：正常
+    Rainy,        // 雨天：客流-15%，后院自动浇水
+    Stormy,       // 暴风雨：客流-30%，可能损坏设施
+    Snowy,        // 下雪：客流-20%，特殊节日加成
+    HeatWave,     // 酷暑：客流-10%，空调需求增
+    ColdSnap,     // 寒潮：客流-10%，暖气需求增
+    Foggy,        // 大雾：旅行延迟+20%
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WeatherForecast {
+    pub date: Date<Utc>,
+    pub weather: Weather,
+    pub confidence: f32,            // 预报准确度
+}
+
+impl Weather {
+    /// 天气对客流的影响
+    pub fn customer_modifier(&self, has_climate_control: bool) -> f32 {
+        if has_climate_control {
+            match self {
+                Weather::Sunny => 1.1,
+                Weather::Cloudy => 1.0,
+                Weather::Rainy => 0.9,
+                Weather::Stormy => 0.85,
+                Weather::Snowy => 0.9,
+                Weather::HeatWave => 1.0,   // 有空调则不受影响
+                Weather::ColdSnap => 1.0,
+                Weather::Foggy => 0.95,
+            }
+        } else {
+            match self {
+                Weather::Sunny => 1.1,
+                Weather::Cloudy => 1.0,
+                Weather::Rainy => 0.85,
+                Weather::Stormy => 0.7,
+                Weather::Snowy => 0.8,
+                Weather::HeatWave => 0.75,
+                Weather::ColdSnap => 0.8,
+                Weather::Foggy => 0.95,
+            }
+        }
+    }
+
+    /// 天气对种植的影响
+    pub fn garden_effect(&self) -> GardenWeatherEffect {
+        match self {
+            Weather::Sunny => GardenWeatherEffect {
+                growth_modifier: 1.2,
+                water_need_multiplier: 1.5,
+                damage_risk: 0.0,
+            },
+            Weather::Rainy => GardenWeatherEffect {
+                growth_modifier: 1.0,
+                water_need_multiplier: 0.0,  // 自动浇水
+                damage_risk: 0.0,
+            },
+            Weather::Stormy => GardenWeatherEffect {
+                growth_modifier: 0.5,
+                water_need_multiplier: 0.0,
+                damage_risk: 0.2,  // 20% 概率损坏作物
+            },
+            Weather::Snowy => GardenWeatherEffect {
+                growth_modifier: 0.3,
+                water_need_multiplier: 0.5,
+                damage_risk: 0.1,
+            },
+            _ => GardenWeatherEffect {
+                growth_modifier: 1.0,
+                water_need_multiplier: 1.0,
+                damage_risk: 0.0,
+            },
+        }
+    }
+
+    /// 天气对旅行的影响
+    pub fn travel_effect(&self) -> TravelWeatherEffect {
+        match self {
+            Weather::Stormy => TravelWeatherEffect {
+                delay_hours: 12,
+                can_cancel: true,
+                risk_level: 0.3,
+            },
+            Weather::Foggy => TravelWeatherEffect {
+                delay_hours: 4,
+                can_cancel: true,
+                risk_level: 0.1,
+            },
+            _ => TravelWeatherEffect::default(),
+        }
+    }
+}
+
+/// 天气生成器
+pub struct WeatherGenerator;
+
+impl WeatherGenerator {
+    /// 根据季节生成天气
+    pub fn generate_weather(season: &Season) -> Weather {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let roll = rng.gen_range(0..100);
+
+        match season {
+            Season::Spring => match roll {
+                0..=40 => Weather::Cloudy,
+                41..=70 => Weather::Rainy,
+                71..=90 => Weather::Sunny,
+                _ => Weather::Foggy,
+            },
+            Season::Summer => match roll {
+                0..=30 => Weather::Sunny,
+                31..=50 => Weather::Cloudy,
+                51..=70 => Weather::Rainy,
+                71..=85 => Weather::HeatWave,
+                _ => Weather::Stormy,
+            },
+            Season::Autumn => match roll {
+                0..=35 => Weather::Sunny,
+                36..=60 => Weather::Cloudy,
+                61..=80 => Weather::Rainy,
+                _ => Weather::Foggy,
+            },
+            Season::Winter => match roll {
+                0..=30 => Weather::Cloudy,
+                31..=50 => Weather::Snowy,
+                51..=70 => Weather::ColdSnap,
+                71..=90 => Weather::Sunny,
+                _ => Weather::Stormy,
+            },
+        }
+    }
+}
+```
+
+#### 6.17.2 天气 API
+
+```
+# 获取当前天气
+GET /api/v1/saves/:id/weather
+
+# 获取天气预报（7天）
+GET /api/v1/saves/:id/weather/forecast?days=7
+```
+
+### 6.18 节假日系统
+
+中国传统节假日影响客流、菜品需求和特殊事件。
+
+#### 6.18.1 节假日定义
+
+```rust
+/// 节假日系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FestivalSystem {
+    pub current_festival: Option<Festival>,
+    pub upcoming_festivals: Vec<Festival>,
+    pub festival_history: Vec<FestivalRecord>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Festival {
+    pub id: FestivalId,
+    pub name: String,
+    pub festival_type: FestivalType,
+    pub start_date: LunarDate,      // 农历日期
+    pub duration_days: u32,
+    pub effects: FestivalEffects,
+    pub special_recipes: Vec<RecipeId>,
+    pub special_events: Vec<FestivalEvent>,
+    pub traditional_foods: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FestivalType {
+    Traditional,   // 传统节日（春节、中秋等）
+    Modern,        // 现代节日（劳动节、国庆等）
+    Solar,         // 节气（立春、冬至等）
+    Local,         // 地方性节日
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LunarDate {
+    pub month: u8,
+    pub day: u8,
+    pub is_leap_month: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FestivalEffects {
+    pub customer_bonus: f32,        // 客流加成
+    pub price_bonus: f32,           // 可提价幅度
+    pub special_decorations: bool,  // 是否解锁特殊装饰
+    pub memory_unlock_chance: f32,  // 记忆碎片解锁概率加成
+    pub employee_morale: f32,       // 员工士气
+}
+
+/// 节假日定义
+impl FestivalSystem {
+    pub fn traditional_festivals() -> Vec<Festival> {
+        vec![
+            // 春节
+            Festival {
+                id: FestivalId::new_v4(),
+                name: "春节".into(),
+                festival_type: FestivalType::Traditional,
+                start_date: LunarDate { month: 1, day: 1, is_leap_month: false },
+                duration_days: 7,
+                effects: FestivalEffects {
+                    customer_bonus: 0.5,
+                    price_bonus: 0.2,
+                    special_decorations: true,
+                    memory_unlock_chance: 0.3,
+                    employee_morale: 0.2,
+                },
+                special_recipes: vec![],  // 饺子、年糕、汤圆
+                special_events: vec![],   // 团圆饭事件
+                traditional_foods: vec!["饺子".into(), "年糕".into(), "鱼".into()],
+            },
+            // 元宵节
+            Festival {
+                id: FestivalId::new_v4(),
+                name: "元宵节".into(),
+                festival_type: FestivalType::Traditional,
+                start_date: LunarDate { month: 1, day: 15, is_leap_month: false },
+                duration_days: 1,
+                effects: FestivalEffects {
+                    customer_bonus: 0.3,
+                    price_bonus: 0.1,
+                    special_decorations: true,
+                    memory_unlock_chance: 0.2,
+                    employee_morale: 0.1,
+                },
+                special_recipes: vec![],  // 汤圆
+                special_events: vec![],
+                traditional_foods: vec!["汤圆".into()],
+            },
+            // 端午节
+            Festival {
+                id: FestivalId::new_v4(),
+                name: "端午节".into(),
+                festival_type: FestivalType::Traditional,
+                start_date: LunarDate { month: 5, day: 5, is_leap_month: false },
+                duration_days: 1,
+                effects: FestivalEffects {
+                    customer_bonus: 0.25,
+                    price_bonus: 0.1,
+                    special_decorations: true,
+                    memory_unlock_chance: 0.15,
+                    employee_morale: 0.1,
+                },
+                special_recipes: vec![],  // 粽子
+                special_events: vec![],
+                traditional_foods: vec!["粽子".into()],
+            },
+            // 中秋节
+            Festival {
+                id: FestivalId::new_v4(),
+                name: "中秋节".into(),
+                festival_type: FestivalType::Traditional,
+                start_date: LunarDate { month: 8, day: 15, is_leap_month: false },
+                duration_days: 3,
+                effects: FestivalEffects {
+                    customer_bonus: 0.35,
+                    price_bonus: 0.15,
+                    special_decorations: true,
+                    memory_unlock_chance: 0.25,
+                    employee_morale: 0.15,
+                },
+                special_recipes: vec![],  // 月饼
+                special_events: vec![],
+                traditional_foods: vec!["月饼".into(), "桂花糕".into()],
+            },
+            // 重阳节
+            Festival {
+                id: FestivalId::new_v4(),
+                name: "重阳节".into(),
+                festival_type: FestivalType::Traditional,
+                start_date: LunarDate { month: 9, day: 9, is_leap_month: false },
+                duration_days: 1,
+                effects: FestivalEffects {
+                    customer_bonus: 0.2,
+                    price_bonus: 0.1,
+                    special_decorations: true,
+                    memory_unlock_chance: 0.2,
+                    employee_morale: 0.1,
+                },
+                special_recipes: vec![],  // 重阳糕
+                special_events: vec![],
+                traditional_foods: vec!["重阳糕".into(), "菊花茶".into()],
+            },
+        ]
+    }
+
+    pub fn solar_terms() -> Vec<SolarTerm> {
+        vec![
+            SolarTerm { name: "立春".into(), effects: SeasonTransitionEffect::SpringStart },
+            SolarTerm { name: "春分".into(), effects: SeasonTransitionEffect::DayNightEqual },
+            SolarTerm { name: "立夏".into(), effects: SeasonTransitionEffect::SummerStart },
+            SolarTerm { name: "夏至".into(), effects: SeasonTransitionEffect::LongestDay },
+            SolarTerm { name: "立秋".into(), effects: SeasonTransitionEffect::AutumnStart },
+            SolarTerm { name: "秋分".into(), effects: SeasonTransitionEffect::DayNightEqual },
+            SolarTerm { name: "立冬".into(), effects: SeasonTransitionEffect::WinterStart },
+            SolarTerm { name: "冬至".into(), effects: SeasonTransitionEffect::ShortestDay },
+        ]
+    }
+}
+
+/// 农历转换器
+pub struct LunarCalendarConverter;
+
+impl LunarCalendarConverter {
+    /// 将公历日期转换为农历日期
+    pub fn solar_to_lunar(date: Date<Utc>) -> LunarDate {
+        // 使用农历算法库进行转换
+        // 实际实现需要引用 lunarcalendar 库或类似实现
+        todo!("集成农历转换库")
+    }
+
+    /// 将农历日期转换为公历日期
+    pub fn lunar_to_solar(lunar: &LunarDate, year: i32) -> Date<Utc> {
+        todo!("集成农历转换库")
+    }
+
+    /// 检查今天是否是某个节日
+    pub fn check_festival(date: Date<Utc>, festivals: &[Festival]) -> Option<&Festival> {
+        let lunar = Self::solar_to_lunar(date);
+        festivals.iter().find(|f| {
+            f.start_date.month == lunar.month && f.start_date.day == lunar.day
+        })
+    }
+}
+```
+
+#### 6.18.2 节假日 API
+
+```
+# 获取当前节日
+GET /api/v1/saves/:id/festivals/current
+
+# 获取即将到来的节日
+GET /api/v1/saves/:id/festivals/upcoming?months=3
+
+# 获取节日历史记录
+GET /api/v1/saves/:id/festivals/history
+```
+
+### 6.19 邻里系统
+
+邻里系统是玩家与老街居民互动的重要途径，通过互助、交易和社交来获取资源和信息。
+
+#### 6.19.1 邻居定义
+
+```rust
+/// 邻里系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeighborhoodSystem {
+    pub neighbors: Vec<Neighbor>,
+    pub mutual_aid_points: u32,     // 互助积分
+    pub community_reputation: u32,  // 社区声望 0-100
+    pub active_requests: Vec<NeighborRequest>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Neighbor {
+    pub id: NeighborId,
+    pub name: String,
+    pub age: u32,
+    pub profession: NeighborProfession,
+    pub personality: NeighborPersonality,
+
+    /// 关系
+    pub relationship: u32,          // 关系值 0-100
+    pub interaction_count: u32,
+    pub last_interaction: Option<DateTime<Utc>>,
+
+    /// 能力
+    pub skills: Vec<NeighborSkill>,
+    pub available_help: Vec<HelpType>,
+    pub trade_options: Vec<TradeOption>,
+
+    /// 背景
+    pub backstory: String,
+    pub connection_to_grandfather: Option<String>,
+    pub schedule: NeighborSchedule,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum NeighborProfession {
+    Electrician,      // 电工
+    Carpenter,        // 木匠
+    Gardener,         // 园艺师
+    Fisherman,        // 渔夫
+    Butcher,          // 屠夫
+    Baker,            // 面包师
+    Teacher,          // 老师
+    RetiredChef,      // 退休厨师
+    Mechanic,         // 机械师
+    Herbalist,        // 草药师
+    Photographer,     // 摄影师
+    StreetVendor,     // 街边小贩
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeighborSkill {
+    pub skill_type: SkillType,
+    pub level: u32,                 // 1-10
+    pub special_bonuses: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum HelpType {
+    FacilityRepair {
+        facility_types: Vec<FacilityType>,
+        discount: f32,
+        time_reduction: f32,
+    },
+    MaterialSupply {
+        material_type: MaterialType,
+        quantity_per_week: u32,
+        quality_bonus: f32,
+    },
+    SkillTeaching {
+        skill: SkillType,
+        max_level: u32,
+        duration_hours: u32,
+    },
+    RecipeHint {
+        recipe_category: String,
+        hint_quality: f32,
+    },
+    EmergencyHelp {
+        help_type: EmergencyType,
+        cooldown_days: u32,
+    },
+    InformationSharing {
+        info_type: InfoType,
+        reliability: f32,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TradeOption {
+    pub id: Uuid,
+    pub name: String,
+    pub give: ResourceSpec,
+    pub receive: ResourceSpec,
+    pub daily_limit: Option<u32>,
+    pub relationship_required: u32,
+    pub available_days: Vec<DayOfWeek>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResourceSpec {
+    pub resource_type: ResourceType,
+    pub quantity: u32,
+    pub quality: Option<u32>,
+}
+
+/// 初始邻居
+impl Neighbor {
+    pub fn initial_neighbors() -> Vec<Self> {
+        vec![
+            // 李大爷 - 退休机械师
+            Self {
+                id: NeighborId::new_v4(),
+                name: "李建国".into(),
+                age: 70,
+                profession: NeighborProfession::Electrician,
+                personality: NeighborPersonality::Cheerful,
+                relationship: 40,  // 初始认识
+                interaction_count: 5,
+                last_interaction: None,
+                skills: vec![
+                    NeighborSkill { skill_type: SkillType::Repair, level: 8, special_bonuses: vec!["old_appliances".into()] },
+                    NeighborSkill { skill_type: SkillType::Fishing, level: 6, special_bonuses: vec![] },
+                ],
+                available_help: vec![
+                    HelpType::FacilityRepair {
+                        facility_types: vec![FacilityType::Electrical],
+                        discount: 0.3,
+                        time_reduction: 0.5,
+                    },
+                ],
+                trade_options: vec![],
+                backstory: "在工厂工作了四十年，退休后闲不住，喜欢帮邻居修修补补。".into(),
+                connection_to_grandfather: Some("祖父的老朋友，常一起下棋钓鱼".into()),
+                schedule: NeighborSchedule::default(),
+            },
+            // 王奶奶 - 花店老板
+            Self {
+                id: NeighborId::new_v4(),
+                name: "王秀英".into(),
+                age: 65,
+                profession: NeighborProfession::Gardener,
+                personality: NeighborPersonality::Gentle,
+                relationship: 35,
+                interaction_count: 3,
+                last_interaction: None,
+                skills: vec![
+                    NeighborSkill { skill_type: SkillType::Gardening, level: 9, special_bonuses: vec!["flowers".into()] },
+                    NeighborSkill { skill_type: SkillType::Herbalism, level: 5, special_bonuses: vec![] },
+                ],
+                available_help: vec![
+                    HelpType::MaterialSupply {
+                        material_type: MaterialType::Seeds,
+                        quantity_per_week: 5,
+                        quality_bonus: 0.2,
+                    },
+                ],
+                trade_options: vec![
+                    TradeOption {
+                        id: Uuid::new_v4(),
+                        name: "花种交换".into(),
+                        give: ResourceSpec { resource_type: ResourceType::Vegetables, quantity: 3, quality: None },
+                        receive: ResourceSpec { resource_type: ResourceType::Seeds, quantity: 2, quality: Some(80) },
+                        daily_limit: Some(1),
+                        relationship_required: 30,
+                        available_days: vec![DayOfWeek::Tuesday, DayOfWeek::Friday],
+                    },
+                ],
+                backstory: "经营花店三十年，对花草了如指掌。".into(),
+                connection_to_grandfather: Some("祖父常向她请教种植问题".into()),
+                schedule: NeighborSchedule::default(),
+            },
+            // 老周 - 自由撰稿人
+            Self {
+                id: NeighborId::new_v4(),
+                name: "周文远".into(),
+                age: 45,
+                profession: NeighborProfession::Photographer,
+                personality: NeighborPersonality::Introverted,
+                relationship: 25,
+                interaction_count: 2,
+                last_interaction: None,
+                skills: vec![
+                    NeighborSkill { skill_type: SkillType::Writing, level: 7, special_bonuses: vec![] },
+                    NeighborSkill { skill_type: SkillType::Photography, level: 6, special_bonuses: vec!["food".into()] },
+                ],
+                available_help: vec![
+                    HelpType::InformationSharing {
+                        info_type: InfoType::FoodTrends,
+                        reliability: 0.8,
+                    },
+                ],
+                trade_options: vec![],
+                backstory: "自由撰稿人，喜欢在小馆写作。".into(),
+                connection_to_grandfather: Some("祖父鼓励他坚持写作".into()),
+                schedule: NeighborSchedule::default(),
+            },
+        ]
+    }
+}
+```
+
+#### 6.19.2 邻里互动系统
+
+```rust
+/// 邻里互动请求
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeighborRequest {
+    pub id: Uuid,
+    pub neighbor_id: NeighborId,
+    pub request_type: NeighborRequestType,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
+    pub deadline: DateTime<Utc>,
+    pub status: RequestStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum NeighborRequestType {
+    HelpNeeded { help_type: String },
+    TradeOffer { trade: TradeOption },
+    SocialVisit,
+    Emergency { urgency: u32 },
+}
+
+/// 邻里互动响应
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NeighborInteraction {
+    pub id: Uuid,
+    pub neighbor_id: NeighborId,
+    pub interaction_type: InteractionType,
+    pub timestamp: DateTime<Utc>,
+    pub outcome: InteractionOutcome,
+    pub relationship_change: i32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum InteractionType {
+    HelpGiven,
+    HelpReceived,
+    TradeCompleted,
+    SocialChat,
+    GiftExchange,
+    Conflict,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InteractionOutcome {
+    pub success: bool,
+    pub narrative: String,
+    pub rewards: Vec<Reward>,
+    pub unlocks: Vec<String>,
+}
+```
+
+#### 6.19.3 邻里 API
+
+```
+# 获取邻居列表
+GET /api/v1/saves/:id/neighbors
+
+# 获取邻居详情
+GET /api/v1/saves/:id/neighbors/:neighbor_id
+
+# 与邻居互动
+POST /api/v1/saves/:id/neighbors/:neighbor_id/interact
+{
+  "interaction_type": "help_request",
+  "help_type": "facility_repair",
+  "facility_id": "uuid"
+}
+
+# 完成交易
+POST /api/v1/saves/:id/neighbors/:neighbor_id/trade
+{
+  "trade_option_id": "uuid"
+}
+
+# 赠送礼物
+POST /api/v1/saves/:id/neighbors/:neighbor_id/gift
+{
+  "item_type": "souvenir",
+  "item_id": "uuid"
+}
+
+# 获取邻里请求
+GET /api/v1/saves/:id/neighbors/requests
+```
+
+### 6.20 供应商系统
+
+供应商系统管理食材和材料的采购渠道。
+
+#### 6.20.1 供应商定义
+
+```rust
+/// 供应商系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SupplierSystem {
+    pub suppliers: Vec<Supplier>,
+    pub active_contracts: Vec<SupplyContract>,
+    pub order_history: Vec<SupplyOrder>,
+    pub unlocked_suppliers: Vec<SupplierId>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Supplier {
+    pub id: SupplierId,
+    pub name: String,
+    pub supplier_type: SupplierType,
+    pub description: String,
+
+    /// 供应能力
+    pub available_ingredients: Vec<IngredientOffering>,
+    pub min_order_quantity: u32,
+    pub max_order_quantity: u32,
+
+    /// 条件
+    pub reliability: u32,           // 可靠性 0-100（影响按时交付概率）
+    pub price_tier: PriceTier,
+    pub quality_range: (u32, u32),  // 品质范围
+    pub delivery_time_hours: u32,
+
+    /// 解锁条件
+    pub unlock_condition: Option<SupplierUnlockCondition>,
+    pub relationship_required: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SupplierType {
+    WholesaleMarket,   // 批发市场 - 价格低，量大，品质一般
+    LocalFarmer,       // 本地农户 - 新鲜，价格中，供应不稳定
+    PremiumSupplier,   // 高端供应商 - 品质高，价格高
+    SpecialtyImporter, // 进口商 - 稀有食材
+    TravelingMerchant, // 流动商贩 - 随机稀有食材
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PriceTier {
+    Budget,      // 预算级：0.6x
+    Standard,    // 标准级：1.0x
+    Premium,     // 高级：1.5x
+    Luxury,      // 奢华级：2.5x
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IngredientOffering {
+    pub ingredient_type: String,
+    pub base_price: Decimal,
+    pub quality: u32,               // 1-100
+    pub available_quantity: u32,
+    pub seasonal_availability: Vec<Season>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SupplyContract {
+    pub id: Uuid,
+    pub supplier_id: SupplierId,
+    pub ingredient_type: String,
+    pub quantity_per_week: u32,
+    pub negotiated_price: Decimal,
+    pub start_date: Date<Utc>,
+    pub end_date: Option<Date<Utc>>,
+    pub discount: f32,              // 长期合同折扣
+    pub reliability_bonus: u32,     // 长期合作可靠性提升
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SupplyOrder {
+    pub id: Uuid,
+    pub supplier_id: SupplierId,
+    pub items: Vec<OrderItem>,
+    pub total_cost: Decimal,
+    pub ordered_at: DateTime<Utc>,
+    pub expected_delivery: DateTime<Utc>,
+    pub actual_delivery: Option<DateTime<Utc>>,
+    pub status: OrderStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrderItem {
+    pub ingredient_type: String,
+    pub quantity: u32,
+    pub unit_price: Decimal,
+    pub quality: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum OrderStatus {
+    Pending,
+    Confirmed,
+    Shipped,
+    Delivered,
+    Delayed { reason: String },
+    Cancelled,
+}
+
+/// 初始供应商
+impl Supplier {
+    pub fn initial_suppliers() -> Vec<Self> {
+        vec![
+            // 批发市场
+            Self {
+                id: SupplierId::new_v4(),
+                name: "老街批发市场".into(),
+                supplier_type: SupplierType::WholesaleMarket,
+                description: "老街最大的食材批发市场，品种齐全，价格实惠。".into(),
+                available_ingredients: vec![
+                    IngredientOffering {
+                        ingredient_type: "米".into(),
+                        base_price: Decimal::from(3),
+                        quality: 60,
+                        available_quantity: 1000,
+                        seasonal_availability: vec![],
+                    },
+                ],
+                min_order_quantity: 10,
+                max_order_quantity: 500,
+                reliability: 85,
+                price_tier: PriceTier::Budget,
+                quality_range: (40, 70),
+                delivery_time_hours: 24,
+                unlock_condition: None,
+                relationship_required: 0,
+            },
+            // 本地农户
+            Self {
+                id: SupplierId::new_v4(),
+                name: "张记农场".into(),
+                supplier_type: SupplierType::LocalFarmer,
+                description: "城郊的有机农场，新鲜蔬菜直供。".into(),
+                available_ingredients: vec![],
+                min_order_quantity: 1,
+                max_order_quantity: 50,
+                reliability: 70,  // 天气影响供应
+                price_tier: PriceTier::Standard,
+                quality_range: (70, 90),
+                delivery_time_hours: 12,
+                unlock_condition: Some(SupplierUnlockCondition::RelationshipWithNeighbor { neighbor_name: "王奶奶".into() }),
+                relationship_required: 50,
+            },
+        ]
+    }
+}
+```
+
+#### 6.20.2 供应商 API
+
+```
+# 获取供应商列表
+GET /api/v1/saves/:id/suppliers
+?type=wholesale|local|premium
+&unlocked=true
+
+# 获取供应商详情
+GET /api/v1/saves/:id/suppliers/:supplier_id
+
+# 下单
+POST /api/v1/saves/:id/suppliers/:supplier_id/order
+{
+  "items": [
+    { "ingredient_type": "番茄", "quantity": 20 }
+  ]
+}
+
+# 签订长期合同
+POST /api/v1/saves/:id/suppliers/:supplier_id/contract
+{
+  "ingredient_type": "番茄",
+  "quantity_per_week": 50,
+  "duration_weeks": 4
+}
+
+# 获取订单状态
+GET /api/v1/saves/:id/suppliers/orders
+&status=pending|delivered
+```
+
+### 6.21 成就系统
+
+成就系统记录玩家的游戏进度和特殊成就。
+
+#### 6.21.1 成就定义
+
+```rust
+/// 成就系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AchievementSystem {
+    pub definitions: Vec<AchievementDefinition>,
+    pub unlocked: Vec<UnlockedAchievement>,
+    pub progress: HashMap<String, AchievementProgress>,
+    pub total_points: u32,
+    pub display_title: Option<String>,  // 当前展示的头衔
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AchievementDefinition {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: AchievementCategory,
+    pub condition: AchievementCondition,
+    pub reward: AchievementReward,
+    pub points: u32,
+    pub hidden: bool,                // 是否为隐藏成就
+    pub icon: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum AchievementCategory {
+    Business,      // 经营类：营收、客流相关
+    Cooking,       // 烹饪类：菜谱、品质相关
+    Social,        // 社交类：顾客、邻里相关
+    Exploration,   // 探索类：旅行相关
+    Story,         // 剧情类：记忆碎片相关
+    Mastery,       // 精通类：技能满级
+    Hidden,        // 隐藏成就
+    TimeBased,     // 时间类：游戏时长、连续登录
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum AchievementCondition {
+    CustomersServed { count: u32 },
+    RevenueEarned { amount: Decimal },
+    RecipesMastered { count: u32 },
+    PerfectExperiments { count: u32 },
+    TravelsCompleted { count: u32 },
+    DestinationsUnlocked { count: u32 },
+    MemoriesCollected { count: u32 },
+    CustomerMaxFavorability { count: u32 },
+    NeighborRelationshipMax { count: u32 },
+    FacilityMaxLevel { count: u32 },
+    ModuleMaxLevel { count: u32 },
+    PlayTime { hours: u32 },
+    ConsecutiveDays { days: u32 },
+    FestivalParticipated { count: u32 },
+    // 复合条件
+    And { conditions: Vec<AchievementCondition> },
+    Or { conditions: Vec<AchievementCondition> },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AchievementReward {
+    pub funds: Option<Decimal>,
+    pub reputation_bonus: Option<u32>,
+    pub unlock_feature: Option<String>,
+    pub title: Option<String>,
+    pub special_item: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UnlockedAchievement {
+    pub achievement_id: String,
+    pub unlocked_at: DateTime<Utc>,
+    pub snapshot: GameSnapshot,     // 解锁时的游戏快照
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AchievementProgress {
+    pub achievement_id: String,
+    pub current_value: u32,
+    pub target_value: u32,
+    pub percentage: f32,
+}
+
+/// 成就定义
+impl AchievementSystem {
+    pub fn all_achievements() -> Vec<AchievementDefinition> {
+        vec![
+            // 经营类
+            AchievementDefinition {
+                id: "first_customer".into(),
+                name: "开门迎客".into(),
+                description: "接待第一位顾客".into(),
+                category: AchievementCategory::Business,
+                condition: AchievementCondition::CustomersServed { count: 1 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(100)),
+                    title: Some("小馆新人".into()),
+                    ..Default::default()
+                },
+                points: 5,
+                hidden: false,
+                icon: None,
+            },
+            AchievementDefinition {
+                id: "hundred_customers".into(),
+                name: "客似云来".into(),
+                description: "累计接待100位顾客".into(),
+                category: AchievementCategory::Business,
+                condition: AchievementCondition::CustomersServed { count: 100 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(500)),
+                    reputation_bonus: Some(5),
+                    ..Default::default()
+                },
+                points: 15,
+                hidden: false,
+                icon: None,
+            },
+            AchievementDefinition {
+                id: "thousand_customers".into(),
+                name: "门庭若市".into(),
+                description: "累计接待1000位顾客".into(),
+                category: AchievementCategory::Business,
+                condition: AchievementCondition::CustomersServed { count: 1000 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(2000)),
+                    reputation_bonus: Some(10),
+                    title: Some("人气店长".into()),
+                    ..Default::default()
+                },
+                points: 30,
+                hidden: false,
+                icon: None,
+            },
+            // 烹饪类
+            AchievementDefinition {
+                id: "first_recipe".into(),
+                name: "初试身手".into(),
+                description: "成功研发第一道菜谱".into(),
+                category: AchievementCategory::Cooking,
+                condition: AchievementCondition::RecipesMastered { count: 1 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(200)),
+                    ..Default::default()
+                },
+                points: 10,
+                hidden: false,
+                icon: None,
+            },
+            AchievementDefinition {
+                id: "master_chef".into(),
+                name: "厨艺大师".into(),
+                description: "成功研发20道菜谱".into(),
+                category: AchievementCategory::Cooking,
+                condition: AchievementCondition::RecipesMastered { count: 20 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(5000)),
+                    title: Some("厨艺大师".into()),
+                    ..Default::default()
+                },
+                points: 50,
+                hidden: false,
+                icon: None,
+            },
+            // 探索类
+            AchievementDefinition {
+                id: "first_travel".into(),
+                name: "踏上旅途".into(),
+                description: "完成第一次旅行".into(),
+                category: AchievementCategory::Exploration,
+                condition: AchievementCondition::TravelsCompleted { count: 1 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(300)),
+                    ..Default::default()
+                },
+                points: 10,
+                hidden: false,
+                icon: None,
+            },
+            AchievementDefinition {
+                id: "world_traveler".into(),
+                name: "足迹天涯".into(),
+                description: "解锁所有旅行目的地".into(),
+                category: AchievementCategory::Exploration,
+                condition: AchievementCondition::DestinationsUnlocked { count: 10 },
+                reward: AchievementReward {
+                    funds: Some(Decimal::from(10000)),
+                    title: Some("足迹天涯".into()),
+                    ..Default::default()
+                },
+                points: 50,
+                hidden: false,
+                icon: None,
+            },
+            // 剧情类
+            AchievementDefinition {
+                id: "memory_keeper".into(),
+                name: "记忆守护者".into(),
+                description: "收集所有祖父记忆碎片".into(),
+                category: AchievementCategory::Story,
+                condition: AchievementCondition::MemoriesCollected { count: 50 },
+                reward: AchievementReward {
+                    title: Some("记忆守护者".into()),
+                    unlock_feature: Some("true_ending".into()),
+                    ..Default::default()
+                },
+                points: 100,
+                hidden: true,
+                icon: None,
+            },
+            // 隐藏成就
+            AchievementDefinition {
+                id: "grandfathers_legacy".into(),
+                name: "祖父的传承".into(),
+                description: "???" // 隐藏描述
+                    .into(),
+                category: AchievementCategory::Hidden,
+                condition: AchievementCondition::And {
+                    conditions: vec![
+                        AchievementCondition::MemoriesCollected { count: 50 },
+                        AchievementCondition::RecipesMastered { count: 30 },
+                        AchievementCondition::CustomerMaxFavorability { count: 4 },
+                    ],
+                },
+                reward: AchievementReward {
+                    title: Some("祖父的传人".into()),
+                    special_item: Some("grandfather_notebook".into()),
+                    ..Default::default()
+                },
+                points: 200,
+                hidden: true,
+                icon: None,
+            },
+        ]
+    }
+}
+```
+
+#### 6.21.2 成就 API
+
+```
+# 获取所有成就
+GET /api/v1/saves/:id/achievements
+&category=business|cooking|...
+&include_hidden=false
+
+# 获取成就进度
+GET /api/v1/saves/:id/achievements/progress
+
+# 获取已解锁成就
+GET /api/v1/saves/:id/achievements/unlocked
+
+# 设置展示头衔
+POST /api/v1/saves/:id/achievements/title
+{
+  "achievement_id": "master_chef"
+}
+```
+
+### 6.22 教程系统
+
+教程系统引导新手玩家熟悉游戏机制。
+
+#### 6.22.1 教程流程
+
+```rust
+/// 教程系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TutorialSystem {
+    pub is_enabled: bool,
+    pub is_active: bool,
+    pub current_step: Option<TutorialStep>,
+    pub completed_steps: Vec<String>,
+    pub skipped: bool,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TutorialStep {
+    pub id: String,
+    pub sequence: u32,
+    pub title: String,
+    pub description: String,
+    pub detailed_text: Option<String>,
+
+    /// UI 引导
+    pub highlight_element: Option<String>,
+    pub highlight_position: Option<HighlightPosition>,
+    pub arrow_direction: Option<ArrowDirection>,
+
+    /// 触发条件
+    pub required_action: TutorialAction,
+    pub auto_advance: bool,         // 完成动作后是否自动进入下一步
+    pub skip_allowed: bool,
+
+    /// 奖励
+    pub completion_reward: Option<TutorialReward>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TutorialAction {
+    ViewSection { section: String },
+    SendCommand { hint: String, pattern: Option<String> },
+    WaitDuration { minutes: u32 },
+    CompleteTask { task_type: String },
+    ReachCondition { condition: String },
+    ClickElement { element_id: String },
+    ReadMessage { message_id: String },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TutorialReward {
+    pub funds: Option<Decimal>,
+    pub unlock_feature: Option<String>,
+    pub hint: Option<String>,
+}
+
+/// 教程流程定义
+impl TutorialSystem {
+    pub fn tutorial_flow() -> Vec<TutorialStep> {
+        vec![
+            // 步骤 1: 欢迎
+            TutorialStep {
+                id: "welcome".into(),
+                sequence: 1,
+                title: "来自地球的消息".into(),
+                description: "你收到了祖父留下的机器人盼盼发来的消息...".into(),
+                detailed_text: Some("祖父去世后，他留下的机器人盼盼一直守着星夜小馆。今天，盼盼终于联系上了远在火星的你。".into()),
+                highlight_element: None,
+                highlight_position: None,
+                arrow_direction: None,
+                required_action: TutorialAction::ReadMessage { message_id: "intro_1".into() },
+                auto_advance: false,
+                skip_allowed: true,
+                completion_reward: None,
+            },
+            // 步骤 2: 查看盼盼状态
+            TutorialStep {
+                id: "view_panpan".into(),
+                sequence: 2,
+                title: "认识盼盼".into(),
+                description: "查看盼盼的当前状态".into(),
+                detailed_text: Some("盼盼是你的得力助手。点击查看它的状态面板，了解它的能量、情绪和能力。".into()),
+                highlight_element: Some("panpan_status_panel".into()),
+                highlight_position: Some(HighlightPosition::Left),
+                arrow_direction: Some(ArrowDirection::Right),
+                required_action: TutorialAction::ViewSection { section: "panpan".into() },
+                auto_advance: true,
+                skip_allowed: true,
+                completion_reward: Some(TutorialReward {
+                    funds: Some(Decimal::from(100)),
+                    hint: Some("小馆的启动资金！".into()),
+                }),
+            },
+            // 步骤 3: 发送第一条指令
+            TutorialStep {
+                id: "first_command".into(),
+                sequence: 3,
+                title: "发送指令".into(),
+                description: "尝试告诉盼盼'查看小馆状态'".into(),
+                detailed_text: Some("由于你在火星，与盼盼的通信会有延迟。发送指令后需要等待一段时间才能收到回复。".into()),
+                highlight_element: Some("command_input".into()),
+                highlight_position: Some(HighlightPosition::Top),
+                arrow_direction: Some(ArrowDirection::Down),
+                required_action: TutorialAction::SendCommand {
+                    hint: "查看小馆状态".into(),
+                    pattern: Some("查看.*状态|状态".into()),
+                },
+                auto_advance: false,
+                skip_allowed: true,
+                completion_reward: None,
+            },
+            // 步骤 4: 理解通信延迟
+            TutorialStep {
+                id: "understand_delay".into(),
+                sequence: 4,
+                title: "通信延迟".into(),
+                description: "等待指令到达...".into(),
+                detailed_text: Some("火星与地球的距离决定了通信延迟。当前延迟约 X 分钟。升级盼盼的通信模块可以减少延迟。".into()),
+                highlight_element: Some("delay_indicator".into()),
+                highlight_position: Some(HighlightPosition::Bottom),
+                arrow_direction: Some(ArrowDirection::Up),
+                required_action: TutorialAction::WaitDuration { minutes: 1 },  // 教程中缩短等待
+                auto_advance: true,
+                skip_allowed: true,
+                completion_reward: None,
+            },
+            // 步骤 5: 查看小馆状态
+            TutorialStep {
+                id: "view_shop".into(),
+                sequence: 5,
+                title: "星夜小馆".into(),
+                description: "查看小馆的当前状况".into(),
+                detailed_text: Some("祖父的小馆已经有些年头了。设施老化，需要修缮。你可以逐步升级各个区域。".into()),
+                highlight_element: Some("shop_panel".into()),
+                highlight_position: None,
+                arrow_direction: None,
+                required_action: TutorialAction::ViewSection { section: "shop".into() },
+                auto_advance: true,
+                skip_allowed: true,
+                completion_reward: None,
+            },
+            // 步骤 6: 教程完成
+            TutorialStep {
+                id: "complete".into(),
+                sequence: 6,
+                title: "开始经营".into(),
+                description: "你已经掌握了基本操作，开始你的小馆经营之旅吧！".into(),
+                detailed_text: Some("提示：多与盼盼交流，它会主动提出建议。探索各个系统，收集祖父的记忆碎片，揭开小馆的故事。".into()),
+                highlight_element: None,
+                highlight_position: None,
+                arrow_direction: None,
+                required_action: TutorialAction::ReachCondition { condition: "user_acknowledged".into() },
+                auto_advance: false,
+                skip_allowed: false,
+                completion_reward: Some(TutorialReward {
+                    funds: Some(Decimal::from(500)),
+                    unlock_feature: Some("travel_system".into()),
+                    hint: Some("旅行系统已解锁！盼盼可以出发旅行收集新菜谱了。".into()),
+                }),
+            },
+        ]
+    }
+}
+```
+
+#### 6.22.2 教程 API
+
+```
+# 获取教程状态
+GET /api/v1/saves/:id/tutorial
+
+# 开始教程
+POST /api/v1/saves/:id/tutorial/start
+
+# 跳过教程
+POST /api/v1/saves/:id/tutorial/skip
+
+# 完成当前步骤
+POST /api/v1/saves/:id/tutorial/advance
+
+# 重置教程
+POST /api/v1/saves/:id/tutorial/reset
+```
+
+### 6.23 统计与数据系统
+
+统计系统记录和分析游戏数据。
+
+#### 6.23.1 游戏统计
+
+```rust
+/// 游戏统计系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GameStatistics {
+    // 经营统计
+    pub total_customers_served: u64,
+    pub total_dishes_sold: u64,
+    pub total_revenue: Decimal,
+    pub total_expenses: Decimal,
+    pub best_selling_dish: Option<RecipeId>,
+    pub best_day_revenue: Option<(Date<Utc>, Decimal)>,
+
+    // 烹饪统计
+    pub dishes_cooked: HashMap<RecipeId, u64>,
+    pub perfect_dishes: u64,
+    pub failed_dishes: u64,
+    pub experiments_conducted: u32,
+    pub experiments_succeeded: u32,
+
+    // 旅行统计
+    pub total_travels: u32,
+    pub destinations_visited: Vec<DestinationId>,
+    pub recipes_found: u32,
+    pub rare_materials_found: u32,
+
+    // 社交统计
+    pub customers_at_max_favorability: u32,
+    pub neighbors_at_max_relationship: u32,
+    pub memories_unlocked: u32,
+
+    // 时间统计
+    pub play_time_hours: f32,
+    pub in_game_days: u32,
+    pub commands_sent: u32,
+
+    // 每日记录
+    pub daily_records: VecDeque<DailyStatistics>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DailyStatistics {
+    pub date: Date<Utc>,
+    pub customers: u32,
+    pub revenue: Decimal,
+    pub expenses: Decimal,
+    pub dishes_served: HashMap<String, u32>,
+    pub average_satisfaction: f32,
+    pub events_triggered: u32,
+    pub weather: Weather,
+    pub festival: Option<String>,
+}
+
+/// 统计分析
+impl GameStatistics {
+    /// 计算平均日营收
+    pub fn average_daily_revenue(&self) -> Decimal {
+        if self.in_game_days == 0 {
+            return Decimal::ZERO;
+        }
+        self.total_revenue / Decimal::from(self.in_game_days)
+    }
+
+    /// 计算营收趋势（最近7天）
+    pub fn revenue_trend(&self) -> RevenueTrend {
+        let recent: Vec<_> = self.daily_records.iter().rev().take(7).collect();
+        if recent.len() < 2 {
+            return RevenueTrend::InsufficientData;
+        }
+
+        let first_half: Decimal = recent.iter().skip(3).map(|d| d.revenue).sum();
+        let second_half: Decimal = recent.iter().take(3).map(|d| d.revenue).sum();
+
+        if second_half > first_half * Decimal::from(110) / 100 {
+            RevenueTrend::Growing
+        } else if second_half < first_half * Decimal::from(90) / 100 {
+            RevenueTrend::Declining
+        } else {
+            RevenueTrend::Stable
+        }
+    }
+
+    /// 获取最受欢迎的菜品
+    pub fn most_popular_dishes(&self, count: usize) -> Vec<(RecipeId, u64)> {
+        let mut dishes: Vec<_> = self.dishes_cooked.iter().map(|(k, v)| (*k, *v)).collect();
+        dishes.sort_by(|a, b| b.1.cmp(&a.1));
+        dishes.into_iter().take(count).collect()
+    }
+}
+
+pub enum RevenueTrend {
+    Growing,
+    Stable,
+    Declining,
+    InsufficientData,
+}
+```
+
+#### 6.23.2 统计 API
+
+```
+# 获取总体统计
+GET /api/v1/saves/:id/statistics
+
+# 获取每日统计
+GET /api/v1/saves/:id/statistics/daily?days=30
+
+# 获取营收图表数据
+GET /api/v1/saves/:id/statistics/revenue-chart?period=week|month
+
+# 获取菜品销售排行
+GET /api/v1/saves/:id/statistics/dish-ranking?limit=10
+
+# 获取顾客分析
+GET /api/v1/saves/:id/statistics/customer-analysis
+
+# 导出统计数据
+GET /api/v1/saves/:id/statistics/export?format=csv|json
+```
+
 ---
 
 ## 七、时间系统与加速模式
@@ -6128,6 +7553,256 @@ CREATE TABLE event_logs (
     occurred_at TEXT NOT NULL,
     FOREIGN KEY (save_id) REFERENCES saves(id)
 );
+
+-- ==================== 新增系统表 ====================
+
+-- 天气状态表
+CREATE TABLE weather_states (
+    save_id TEXT PRIMARY KEY,
+    current_weather TEXT NOT NULL,
+    season TEXT NOT NULL,
+    last_update TEXT NOT NULL,
+    forecast TEXT NOT NULL,          -- Vec<WeatherForecast> JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 节假日状态表
+CREATE TABLE festival_states (
+    save_id TEXT PRIMARY KEY,
+    current_festival TEXT,           -- Festival JSON
+    upcoming_festivals TEXT NOT NULL,-- Vec<Festival> JSON
+    festival_history TEXT NOT NULL,  -- Vec<FestivalRecord> JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 邻居表
+CREATE TABLE neighbors (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    profession TEXT NOT NULL,
+    personality TEXT NOT NULL,
+    relationship INTEGER NOT NULL DEFAULT 0,
+    interaction_count INTEGER NOT NULL DEFAULT 0,
+    last_interaction TEXT,
+    skills TEXT NOT NULL,            -- Vec<NeighborSkill> JSON
+    available_help TEXT NOT NULL,    -- Vec<HelpType> JSON
+    trade_options TEXT NOT NULL,     -- Vec<TradeOption> JSON
+    backstory TEXT NOT NULL,
+    connection_to_grandfather TEXT,
+    schedule TEXT NOT NULL,          -- NeighborSchedule JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 邻里互动记录表
+CREATE TABLE neighbor_interactions (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    neighbor_id TEXT NOT NULL,
+    interaction_type TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    outcome TEXT NOT NULL,           -- InteractionOutcome JSON
+    relationship_change INTEGER NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (neighbor_id) REFERENCES neighbors(id)
+);
+
+-- 邻里请求表
+CREATE TABLE neighbor_requests (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    neighbor_id TEXT NOT NULL,
+    request_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    deadline TEXT NOT NULL,
+    status TEXT NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (neighbor_id) REFERENCES neighbors(id)
+);
+
+-- 供应商表
+CREATE TABLE suppliers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    supplier_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    available_ingredients TEXT NOT NULL, -- Vec<IngredientOffering> JSON
+    min_order_quantity INTEGER NOT NULL,
+    max_order_quantity INTEGER NOT NULL,
+    reliability INTEGER NOT NULL,
+    price_tier TEXT NOT NULL,
+    quality_range_min INTEGER NOT NULL,
+    quality_range_max INTEGER NOT NULL,
+    delivery_time_hours INTEGER NOT NULL,
+    unlock_condition TEXT,           -- SupplierUnlockCondition JSON
+    relationship_required INTEGER NOT NULL DEFAULT 0
+);
+
+-- 已解锁供应商表
+CREATE TABLE unlocked_suppliers (
+    save_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    PRIMARY KEY (save_id, supplier_id),
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+-- 供应合同表
+CREATE TABLE supply_contracts (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    ingredient_type TEXT NOT NULL,
+    quantity_per_week INTEGER NOT NULL,
+    negotiated_price TEXT NOT NULL,  -- Decimal
+    start_date TEXT NOT NULL,
+    end_date TEXT,
+    discount REAL NOT NULL,
+    reliability_bonus INTEGER NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+-- 供应订单表
+CREATE TABLE supply_orders (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    supplier_id TEXT NOT NULL,
+    items TEXT NOT NULL,             -- Vec<OrderItem> JSON
+    total_cost TEXT NOT NULL,        -- Decimal
+    ordered_at TEXT NOT NULL,
+    expected_delivery TEXT NOT NULL,
+    actual_delivery TEXT,
+    status TEXT NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+);
+
+-- 成就表
+CREATE TABLE achievements (
+    id TEXT PRIMARY KEY,             -- 成就定义 ID
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    condition TEXT NOT NULL,         -- AchievementCondition JSON
+    reward TEXT NOT NULL,            -- AchievementReward JSON
+    points INTEGER NOT NULL,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    icon TEXT
+);
+
+-- 已解锁成就表
+CREATE TABLE unlocked_achievements (
+    save_id TEXT NOT NULL,
+    achievement_id TEXT NOT NULL,
+    unlocked_at TEXT NOT NULL,
+    snapshot TEXT NOT NULL,          -- GameSnapshot JSON
+    PRIMARY KEY (save_id, achievement_id),
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id)
+);
+
+-- 成就进度表
+CREATE TABLE achievement_progress (
+    save_id TEXT NOT NULL,
+    achievement_id TEXT NOT NULL,
+    current_value INTEGER NOT NULL,
+    target_value INTEGER NOT NULL,
+    percentage REAL NOT NULL,
+    PRIMARY KEY (save_id, achievement_id),
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id)
+);
+
+-- 教程状态表
+CREATE TABLE tutorial_states (
+    save_id TEXT PRIMARY KEY,
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    current_step TEXT,
+    completed_steps TEXT NOT NULL,   -- Vec<String> JSON
+    skipped INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT,
+    completed_at TEXT,
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 游戏统计表
+CREATE TABLE game_statistics (
+    save_id TEXT PRIMARY KEY,
+    -- 经营统计
+    total_customers_served INTEGER NOT NULL DEFAULT 0,
+    total_dishes_sold INTEGER NOT NULL DEFAULT 0,
+    total_revenue TEXT NOT NULL,     -- Decimal
+    total_expenses TEXT NOT NULL,    -- Decimal
+    best_selling_dish TEXT,
+    best_day_revenue_date TEXT,
+    best_day_revenue_amount TEXT,
+    -- 烹饪统计
+    dishes_cooked TEXT NOT NULL,     -- HashMap<RecipeId, u64> JSON
+    perfect_dishes INTEGER NOT NULL DEFAULT 0,
+    failed_dishes INTEGER NOT NULL DEFAULT 0,
+    experiments_conducted INTEGER NOT NULL DEFAULT 0,
+    experiments_succeeded INTEGER NOT NULL DEFAULT 0,
+    -- 旅行统计
+    total_travels INTEGER NOT NULL DEFAULT 0,
+    destinations_visited TEXT NOT NULL, -- Vec<DestinationId> JSON
+    recipes_found INTEGER NOT NULL DEFAULT 0,
+    rare_materials_found INTEGER NOT NULL DEFAULT 0,
+    -- 社交统计
+    customers_at_max_favorability INTEGER NOT NULL DEFAULT 0,
+    neighbors_at_max_relationship INTEGER NOT NULL DEFAULT 0,
+    memories_unlocked INTEGER NOT NULL DEFAULT 0,
+    -- 时间统计
+    play_time_hours REAL NOT NULL DEFAULT 0,
+    in_game_days INTEGER NOT NULL DEFAULT 0,
+    commands_sent INTEGER NOT NULL DEFAULT 0,
+    -- 每日记录（最近30天）
+    daily_records TEXT NOT NULL,     -- VecDeque<DailyStatistics> JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- ==================== 索引设计 ====================
+
+-- 指令队列索引
+CREATE INDEX idx_commands_save_arrive ON command_queue(save_id, arrive_at);
+CREATE INDEX idx_commands_status ON command_queue(status);
+
+-- 模块索引
+CREATE INDEX idx_modules_save_type ON modules(save_id, module_type);
+
+-- 设施索引
+CREATE INDEX idx_facilities_save_zone ON shop_facilities(save_id, zone);
+CREATE INDEX idx_facilities_type ON shop_facilities(facility_type);
+
+-- 菜谱索引
+CREATE INDEX idx_recipes_save_status ON recipes(save_id, status);
+CREATE INDEX idx_recipes_cuisine ON recipes(cuisine_style);
+
+-- 记忆碎片索引
+CREATE INDEX idx_memory_save_unlocked ON memory_fragments(save_id, unlocked);
+CREATE INDEX idx_memory_type ON memory_fragments(fragment_type);
+
+-- 事件日志索引
+CREATE INDEX idx_events_save_type ON event_logs(save_id, event_type);
+CREATE INDEX idx_events_time ON event_logs(occurred_at);
+
+-- 顾客索引
+CREATE INDEX idx_customers_save_favorability ON customers(save_id, favorability);
+
+-- 邻居索引
+CREATE INDEX idx_neighbors_save_relationship ON neighbors(save_id, relationship);
+
+-- 订单索引
+CREATE INDEX idx_orders_status ON supply_orders(status);
+CREATE INDEX idx_orders_expected ON supply_orders(expected_delivery);
+
+-- 成就索引
+CREATE INDEX idx_achievements_category ON achievements(category);
+CREATE INDEX idx_unlocked_save ON unlocked_achievements(save_id);
 ```
 
 ---
@@ -6210,6 +7885,49 @@ POST   /api/v1/saves/:id/shop/atmosphere/clean     # 执行清洁
 GET    /api/v1/saves/:id/shop/research             # 获取研发线索
 POST   /api/v1/saves/:id/shop/research/:clue_id/discover  # 发现线索
 
+# ==================== 天气系统 ====================
+GET    /api/v1/saves/:id/weather                    # 获取当前天气
+GET    /api/v1/saves/:id/weather/forecast           # 获取天气预报
+GET    /api/v1/saves/:id/weather/season             # 获取当前季节
+
+# ==================== 节假日系统 ====================
+GET    /api/v1/saves/:id/festivals                  # 获取节日列表
+GET    /api/v1/saves/:id/festivals/today            # 获取今日节日
+GET    /api/v1/saves/:id/festivals/upcoming         # 获取即将到来的节日
+
+# ==================== 邻里系统 ====================
+GET    /api/v1/saves/:id/neighbors                  # 获取邻居列表
+GET    /api/v1/saves/:id/neighbors/:neighbor_id     # 获取邻居详情
+POST   /api/v1/saves/:id/neighbors/:neighbor_id/interact  # 与邻居互动
+POST   /api/v1/saves/:id/neighbors/:neighbor_id/gift      # 赠送礼物
+GET    /api/v1/saves/:id/neighbors/:neighbor_id/events    # 获取邻居事件
+
+# ==================== 供应商系统 ====================
+GET    /api/v1/saves/:id/suppliers                  # 获取供应商列表
+GET    /api/v1/saves/:id/suppliers/:supplier_id     # 获取供应商详情
+POST   /api/v1/saves/:id/suppliers/:supplier_id/order     # 下订单
+GET    /api/v1/saves/:id/suppliers/orders           # 获取订单列表
+PATCH  /api/v1/saves/:id/suppliers/orders/:order_id # 更新订单状态
+
+# ==================== 成就系统 ====================
+GET    /api/v1/saves/:id/achievements               # 获取成就列表
+GET    /api/v1/saves/:id/achievements/unlocked      # 获取已解锁成就
+POST   /api/v1/saves/:id/achievements/:achievement_id/claim  # 领取成就奖励
+GET    /api/v1/saves/:id/achievements/progress      # 获取成就进度
+
+# ==================== 教程系统 ====================
+GET    /api/v1/saves/:id/tutorial                   # 获取教程状态
+POST   /api/v1/saves/:id/tutorial/complete/:step    # 完成教程步骤
+POST   /api/v1/saves/:id/tutorial/skip              # 跳过教程
+GET    /api/v1/saves/:id/tutorial/hint              # 获取当前上下文提示
+
+# ==================== 统计系统 ====================
+GET    /api/v1/saves/:id/statistics                 # 获取统计概览
+GET    /api/v1/saves/:id/statistics/finance         # 获取财务统计
+GET    /api/v1/saves/:id/statistics/customers       # 获取客流统计
+GET    /api/v1/saves/:id/statistics/dishes          # 获取菜品统计
+GET    /api/v1/saves/:id/statistics/trends          # 获取趋势数据
+
 # ==================== 其他系统 ====================
 GET    /api/v1/saves/:id/travels           # 获取旅行记录
 GET    /api/v1/saves/:id/experiments       # 获取实验记录
@@ -6236,6 +7954,15 @@ enum ServerMessage {
     EventOccurred { event: GameEvent },
     PanpanStatusUpdate { status: PanpanState },
     TimeSync { earth_time: DateTime<Utc>, delay_minutes: u32 },
+    // 新系统消息
+    WeatherChanged { weather: WeatherState },
+    FestivalStarted { festival: Festival },
+    FestivalEnded { festival_id: String },
+    NeighborEvent { neighbor_id: String, event: NeighborEvent },
+    OrderDelivered { order: SupplyOrder },
+    AchievementUnlocked { achievement: Achievement },
+    TutorialStepCompleted { step: String, next_step: Option<String> },
+    StatisticsUpdated { category: StatCategory, data: StatData },
 }
 ```
 
@@ -6243,7 +7970,7 @@ enum ServerMessage {
 
 ## 十一、通信延迟系统实现
 
-### 13.1 延迟计算（与模块关联）
+### 11.1 延迟计算（与模块关联）
 
 通信延迟由两部分组成：
 1. **基础延迟**：火星-地球物理距离决定（不可改变）
@@ -6324,7 +8051,7 @@ impl CommunicationSystem {
 }
 ```
 
-### 13.2 延迟示意
+### 11.2 延迟示意
 
 | 游戏阶段 | 通信模块等级 | 基础延迟 | 模块延迟 | 总延迟 |
 |---------|------------|---------|---------|--------|
@@ -6334,7 +8061,7 @@ impl CommunicationSystem {
 
 > 注：基础延迟会随火星-地球距离变化（4-24分钟），模块延迟叠加其上。
 
-### 13.3 指令队列管理
+### 11.3 指令队列管理
 
 ```rust
 pub struct CommandQueue {
@@ -6521,18 +8248,18 @@ backend/
 
 ## 十四、验证方案
 
-### 12.1 开发阶段验证
+### 14.1 开发阶段验证
 1. 使用 `cargo test` 运行单元测试
 2. 使用 `curl` 或 Postman 测试 HTTP API
 3. 使用 `wscat` 测试 WebSocket 连接
 
-### 12.2 功能验证
+### 14.2 功能验证
 1. 创建新存档，验证数据库写入
 2. 发送指令，验证延迟队列工作正常
 3. 触发事件，验证事件系统响应
 4. 模拟时间流逝，验证各子系统状态更新
 
-### 12.3 性能验证
+### 14.3 性能验证
 1. 压力测试 API 端点
 2. 验证长时间运行稳定性
 3. 验证内存使用情况
@@ -6564,6 +8291,14 @@ backend/
 | **菜品体系** | 3 种来源（传承/旅行/创新），4 种状态（损坏/模糊/精确/掌握）|
 | **升级系统** | 每个设施有独立升级路径，需资金/材料/时间/人员 |
 | **里程碑** | 每区域有里程碑系统，完成解锁奖励 |
+| **天气系统** | 4 种天气类型（晴/雨/雪/阴），4 季节循环，影响客流和种植 |
+| **节假日系统** | 内置中国传统节日，特殊事件和客流加成，顾客行为变化 |
+| **邻里系统** | 5+ 邻居角色，好感度 0-100，互助事件，可提供服务和材料 |
+| **供应商系统** | 3 类供应商（食材/设备/杂货），品质/价格/配送时间权衡选择 |
+| **成就系统** | 5 大类别（经营/探索/社交/烹饪/收集），隐藏成就和里程碑成就 |
+| **教程系统** | 5 阶段引导（基础/进阶/高级/专家/隐藏），可跳过，上下文感知提示 |
+| **统计系统** | 7 类统计数据（财务/客流/顾客/菜品/运营/里程碑/趋势），支持可视化 |
+| **数据库索引** | 为高频查询字段建立索引（save_id、时间戳、类型字段等） |
 
 ---
 
