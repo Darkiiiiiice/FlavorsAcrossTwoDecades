@@ -1356,31 +1356,6 @@ impl Season {
 }
 ```
 
-#### 6.4.4 员工系统
-
-```rust
-/// 员工信息
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Employee {
-    pub id: Uuid,
-    pub name: String,
-    pub position: EmployeePosition,
-    pub skill_level: u32,            // 1-5
-    pub daily_wage: Decimal,
-    pub satisfaction: u32,           // 0-100
-    pub special_ability: Option<String>,
-    pub hire_date: Date<Utc>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum EmployeePosition {
-    Chef,        // 厨师
-    Waiter,      // 服务员
-    Helper,      // 帮工
-    Cleaner,     // 清洁工
-}
-```
-
 ### 6.5 厨房运营系统
 
 #### 6.5.1 库存管理系统
@@ -5762,7 +5737,7 @@ pub struct FestivalEffects {
     pub price_bonus: f32,           // 可提价幅度
     pub special_decorations: bool,  // 是否解锁特殊装饰
     pub memory_unlock_chance: f32,  // 记忆碎片解锁概率加成
-    pub employee_morale: f32,       // 员工士气
+    pub panpan_mood_bonus: f32,     // 盼盼心情加成
 }
 
 /// 节假日定义
@@ -5781,7 +5756,7 @@ impl FestivalSystem {
                     price_bonus: 0.2,
                     special_decorations: true,
                     memory_unlock_chance: 0.3,
-                    employee_morale: 0.2,
+                    panpan_mood_bonus: 0.2,
                 },
                 special_recipes: vec![],  // 饺子、年糕、汤圆
                 special_events: vec![],   // 团圆饭事件
@@ -5799,7 +5774,7 @@ impl FestivalSystem {
                     price_bonus: 0.1,
                     special_decorations: true,
                     memory_unlock_chance: 0.2,
-                    employee_morale: 0.1,
+                    panpan_mood_bonus: 0.1,
                 },
                 special_recipes: vec![],  // 汤圆
                 special_events: vec![],
@@ -5817,7 +5792,7 @@ impl FestivalSystem {
                     price_bonus: 0.1,
                     special_decorations: true,
                     memory_unlock_chance: 0.15,
-                    employee_morale: 0.1,
+                    panpan_mood_bonus: 0.1,
                 },
                 special_recipes: vec![],  // 粽子
                 special_events: vec![],
@@ -5835,7 +5810,7 @@ impl FestivalSystem {
                     price_bonus: 0.15,
                     special_decorations: true,
                     memory_unlock_chance: 0.25,
-                    employee_morale: 0.15,
+                    panpan_mood_bonus: 0.15,
                 },
                 special_recipes: vec![],  // 月饼
                 special_events: vec![],
@@ -5853,7 +5828,7 @@ impl FestivalSystem {
                     price_bonus: 0.1,
                     special_decorations: true,
                     memory_unlock_chance: 0.2,
-                    employee_morale: 0.1,
+                    panpan_mood_bonus: 0.1,
                 },
                 special_recipes: vec![],  // 重阳糕
                 special_events: vec![],
@@ -7182,7 +7157,6 @@ struct ShopState {
     // 经营数据
     finance: FinancialState,          // 资金状态
     customer_stats: CustomerStats,    // 顾客统计
-    employees: Vec<Employee>,         // 员工列表
 
     // 菜品体系
     recipes: Vec<Recipe>,             // 已有菜谱
@@ -7448,20 +7422,6 @@ CREATE TABLE shop_restoration (
     milestones TEXT NOT NULL,        -- Vec<Milestone> JSON
     unlocked_features TEXT NOT NULL, -- Vec<String> JSON
     UNIQUE(save_id, zone),
-    FOREIGN KEY (save_id) REFERENCES shop_states(save_id)
-);
-
--- 员工表
-CREATE TABLE shop_employees (
-    id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    position TEXT NOT NULL,          -- Chef/Waiter/Helper/Cleaner
-    skill_level INTEGER NOT NULL DEFAULT 1,
-    daily_wage TEXT NOT NULL,
-    satisfaction INTEGER NOT NULL DEFAULT 50,
-    special_ability TEXT,
-    hire_date TEXT NOT NULL,
     FOREIGN KEY (save_id) REFERENCES shop_states(save_id)
 );
 
@@ -7858,12 +7818,6 @@ GET    /api/v1/saves/:id/shop/finance/history      # 获取财务历史
 GET    /api/v1/saves/:id/shop/customers            # 获取顾客统计
 GET    /api/v1/saves/:id/shop/customers/today      # 获取今日客流
 
-# ==================== 员工管理 ====================
-GET    /api/v1/saves/:id/shop/employees            # 获取员工列表
-POST   /api/v1/saves/:id/shop/employees            # 雇佣员工
-DELETE /api/v1/saves/:id/shop/employees/:emp_id    # 解雇员工
-PATCH  /api/v1/saves/:id/shop/employees/:emp_id    # 更新员工信息
-
 # ==================== 菜谱管理 ====================
 GET    /api/v1/saves/:id/shop/recipes              # 获取所有菜谱
 GET    /api/v1/saves/:id/shop/recipes/available    # 获取可用菜谱
@@ -8172,7 +8126,6 @@ backend/
 │   │   │   ├── restoration.rs    # 修复进度管理
 │   │   │   ├── finance.rs        # 财务管理
 │   │   │   ├── customer.rs       # 顾客管理
-│   │   │   ├── employee.rs       # 员工管理
 │   │   │   ├── recipe.rs         # 菜谱管理
 │   │   │   ├── menu.rs           # 菜单管理
 │   │   │   ├── reputation.rs     # 口碑计算
@@ -8299,6 +8252,7 @@ backend/
 | **教程系统** | 5 阶段引导（基础/进阶/高级/专家/隐藏），可跳过，上下文感知提示 |
 | **统计系统** | 7 类统计数据（财务/客流/顾客/菜品/运营/里程碑/趋势），支持可视化 |
 | **数据库索引** | 为高频查询字段建立索引（save_id、时间戳、类型字段等） |
+| **人员管理** | 无员工系统，盼盼独立管理所有功能，体现机器人主角特色 |
 
 ---
 
