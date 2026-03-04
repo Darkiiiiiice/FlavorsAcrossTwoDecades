@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use futures::Stream;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -68,6 +69,15 @@ pub struct LlmManager {
     config: LlmConfig,
 }
 
+impl fmt::Debug for LlmManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LlmManager")
+            .field("provider", &"Arc<dyn LlmProvider>")
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 impl LlmManager {
     /// 创建新的 LLM 管理器
     pub fn new(provider: Arc<dyn LlmProvider>, config: LlmConfig) -> Self {
@@ -102,6 +112,21 @@ impl LlmManager {
                 // 降级策略：使用基于规则的简单决策
                 self.fallback_decision(decision_type)
             }
+        }
+    }
+
+    /// 生成文本（通用方法）
+    pub async fn generate_text(&self, system_prompt: String, user_message: String) -> Result<String> {
+        let request = LlmRequest {
+            system_prompt,
+            user_message,
+            temperature: Some(self.config.temperature),
+            max_tokens: Some(self.config.max_tokens),
+        };
+
+        match self.provider.generate(request).await {
+            Ok(response) => Ok(response.content),
+            Err(e) => Err(e),
         }
     }
 
