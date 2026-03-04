@@ -3,6 +3,7 @@
 pub mod command;
 pub mod engine;
 pub mod event;
+pub mod garden;
 pub mod llm;
 pub mod panpan;
 pub mod shop;
@@ -19,6 +20,7 @@ use crate::db::DbPool;
 pub use command::{Command, CommandQueue, CommandStatus};
 pub use engine::GameEngine;
 pub use event::{EventDispatcher, GameEvent, GameEventType};
+pub use garden::{Crop, CropType, Garden, GardenPlot, GrowthStage, PestType, PlotState, Rarity, Season};
 pub use llm::{create_llm_manager, LlmManager};
 pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
 pub use shop::{FacilityZone, Finance, Inventory, Reputation, Shop, ZoneLevel};
