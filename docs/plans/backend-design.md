@@ -5,7 +5,7 @@
 基于游戏设计文档 GameDraft.md，设计一款前后端分离的终端游戏后端服务。
 
 **核心需求**：
-- 模拟火星-地球星际通信延迟（4-24分钟）
+- 模拟火星-地球星际通信延迟（10-120秒）
 - 管理实体AI机器人"盼盼"的状态和行为
 - 实现餐厅经营、旅行收集、实验研发等子系统
 - 与地球时间同步
@@ -28,6 +28,317 @@
 | CLI | clap | 命令行参数解析 |
 | **LLM 客户端** | async-ollama | 调用 Ollama API，异步支持 |
 | **Prompt 管理** | handlebars-rust | 模板化 Prompt，动态注入上下文 |
+
+---
+
+## 1.5 统一错误处理系统
+
+### 1.5.1 设计理念
+
+采用统一的错误类型体系，确保：
+- 所有错误都有清晰的分类和编码
+- 错误信息对玩家友好（不暴露技术细节）
+- 错误可追踪（包含请求ID）
+- 支持国际化错误消息
+
+### 1.5.2 错误类型体系
+
+```rust
+use thiserror::Error;
+
+/// 游戏统一错误类型
+#[derive(Debug, Error)]
+pub enum GameError {
+    // ========== 数据库错误 ==========
+    #[error("数据库操作失败: {0}")]
+    Database(#[from] DatabaseError),
+
+    #[error("实体未找到: {entity_type}({entity_id})")]
+    NotFound {
+        entity_type: String,
+        entity_id: String,
+    },
+
+    #[error("数据验证失败: {details}")]
+    Validation { details: String },
+
+    #[error("数据冲突: {conflict_type}")]
+    Conflict { conflict_type: String },
+
+    // ========== 游戏逻辑错误 ==========
+    #[error("状态不允许此操作: 当前状态={current_state}, 需要状态={required_states:?}")]
+    InvalidState {
+        current_state: String,
+        required_states: Vec<String>,
+    },
+
+    #[error("资源不足: {resource} 需要 {required}, 当前 {available}")]
+    InsufficientResource {
+        resource: String,
+        required: u32,
+        available: u32,
+    },
+
+    #[error("条件不满足: {condition}")]
+    ConditionNotMet { condition: String },
+
+    #[error("操作冷却中: 剩余 {remaining_seconds} 秒")]
+    Cooldown { remaining_seconds: u32 },
+
+    // ========== 系统错误 ==========
+    #[error("LLM 服务暂时不可用")]
+    LlmUnavailable,
+
+    #[error("服务内部错误: {request_id}")]
+    Internal { request_id: String },
+
+    #[error("服务繁忙，请稍后重试")]
+    RateLimited { retry_after_seconds: u32 },
+
+    // ========== 存档错误 ==========
+    #[error("存档版本不兼容: 存档版本={save_version}, 当前版本={current_version}")]
+    IncompatibleVersion {
+        save_version: u32,
+        current_version: u32,
+    },
+
+    #[error("存档损坏: {details}")]
+    CorruptedSave { details: String },
+
+    #[error("导入失败: {reason}")]
+    ImportFailed { reason: String },
+}
+
+/// 数据库错误
+#[derive(Debug, Error)]
+pub enum DatabaseError {
+    #[error("连接失败: {0}")]
+    ConnectionFailed(String),
+
+    #[error("查询失败: {0}")]
+    QueryFailed(String),
+
+    #[error("写入失败: {0}")]
+    WriteFailed(String),
+
+    #[error("事务失败: {0}")]
+    TransactionFailed(String),
+
+    #[error("数据库损坏")]
+    CorruptionDetected,
+}
+
+/// 子系统专用错误
+#[derive(Debug, Error)]
+pub enum GardenError {
+    #[error("菜地未解锁")]
+    PlotLocked,
+
+    #[error("菜地已被占用")]
+    PlotOccupied,
+
+    #[error("种子不足")]
+    InsufficientSeeds,
+
+    #[error("作物未成熟")]
+    CropNotMature,
+
+    #[error("季节不适宜种植此作物")]
+    SeasonNotSuitable,
+
+    #[error("肥力不足")]
+    InsufficientFertility,
+
+    #[error("病害严重，需要先治疗")]
+    SevereDisease,
+}
+
+#[derive(Debug, Error)]
+pub enum KitchenError {
+    #[error("设备不可用: {device}")]
+    DeviceUnavailable { device: String },
+
+    #[error("食材不足: {ingredient}")]
+    InsufficientIngredient { ingredient: String },
+
+    #[error("菜谱未解锁")]
+    RecipeLocked,
+
+    #[error("正在被占用")]
+    InUse,
+}
+
+#[derive(Debug, Error)]
+pub enum TravelError {
+    #[error("正在冷却中")]
+    OnCooldown,
+
+    #[error("盼盼电量不足")]
+    InsufficientEnergy,
+
+    #[error("小馆需要人手")]
+    ShopNeedsAttention,
+
+    #[error("旅行中无法执行此操作")]
+    AlreadyTravelling,
+}
+```
+
+### 1.5.3 错误响应格式
+
+```rust
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// API 错误响应
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    /// 错误码（用于前端国际化）
+    pub code: String,
+    /// 错误消息（玩家可见）
+    pub message: String,
+    /// 详细信息（调试用，仅开发环境显示）
+    pub details: Option<String>,
+    /// 请求追踪ID
+    pub request_id: String,
+    /// 时间戳
+    pub timestamp: String,
+    /// 额外数据（如冷却剩余时间）
+    pub data: Option<serde_json::Value>,
+}
+
+impl ErrorResponse {
+    pub fn from_error(error: &GameError, request_id: Uuid) -> Self {
+        Self {
+            code: error.error_code(),
+            message: error.to_string(),
+            details: None,
+            request_id: request_id.to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+            data: error.additional_data(),
+        }
+    }
+
+    pub fn with_details(mut self, details: String) -> Self {
+        self.details = Some(details);
+        self
+    }
+}
+
+/// 错误码映射
+pub trait ErrorCode {
+    fn error_code(&self) -> String;
+    fn additional_data(&self) -> Option<serde_json::Value>;
+}
+
+impl ErrorCode for GameError {
+    fn error_code(&self) -> String {
+        match self {
+            GameError::Database(_) => "E001".to_string(),
+            GameError::NotFound { .. } => "E002".to_string(),
+            GameError::Validation { .. } => "E003".to_string(),
+            GameError::Conflict { .. } => "E004".to_string(),
+            GameError::InvalidState { .. } => "E101".to_string(),
+            GameError::InsufficientResource { .. } => "E102".to_string(),
+            GameError::ConditionNotMet { .. } => "E103".to_string(),
+            GameError::Cooldown { .. } => "E104".to_string(),
+            GameError::LlmUnavailable => "E201".to_string(),
+            GameError::Internal { .. } => "E500".to_string(),
+            GameError::RateLimited { .. } => "E429".to_string(),
+            GameError::IncompatibleVersion { .. } => "E301".to_string(),
+            GameError::CorruptedSave { .. } => "E302".to_string(),
+            GameError::ImportFailed { .. } => "E303".to_string(),
+        }
+    }
+
+    fn additional_data(&self) -> Option<serde_json::Value> {
+        match self {
+            GameError::Cooldown { remaining_seconds } => {
+                Some(serde_json::json!({ "remaining_seconds": remaining_seconds }))
+            }
+            GameError::InsufficientResource { resource, required, available } => {
+                Some(serde_json::json!({
+                    "resource": resource,
+                    "required": required,
+                    "available": available
+                }))
+            }
+            _ => None,
+        }
+    }
+}
+```
+
+### 1.5.4 错误处理中间件
+
+```rust
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
+use tracing::error;
+
+/// 统一错误响应转换
+impl IntoResponse for GameError {
+    fn into_response(self) -> Response {
+        let request_id = Uuid::new_v4();
+        let status_code = self.status_code();
+
+        // 记录错误日志
+        error!(
+            request_id = %request_id,
+            error = %self,
+            error_code = %self.error_code(),
+            "Request failed"
+        );
+
+        let error_response = ErrorResponse::from_error(&self, request_id);
+
+        (status_code, Json(error_response)).into_response()
+    }
+}
+
+impl GameError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            GameError::NotFound { .. } => StatusCode::NOT_FOUND,
+            GameError::Validation { .. } => StatusCode::BAD_REQUEST,
+            GameError::Conflict { .. } => StatusCode::CONFLICT,
+            GameError::InvalidState { .. } => StatusCode::CONFLICT,
+            GameError::ConditionNotMet { .. } => StatusCode::FAILED_DEPENDENCY,
+            GameError::Cooldown { .. } => StatusCode::TOO_MANY_REQUESTS,
+            GameError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            GameError::LlmUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            GameError::IncompatibleVersion { .. } => StatusCode::BAD_REQUEST,
+            GameError::CorruptedSave { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            GameError::ImportFailed { .. } => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+/// 结果类型别名
+pub type GameResult<T> = Result<T, GameError>;
+```
+
+### 1.5.5 错误码表
+
+| 错误码 | HTTP状态码 | 说明 | 玩家提示示例 |
+|--------|-----------|------|-------------|
+| E001 | 500 | 数据库错误 | 系统繁忙，请稍后重试 |
+| E002 | 404 | 实体未找到 | 找不到该存档 |
+| E003 | 400 | 数据验证失败 | 输入格式不正确 |
+| E004 | 409 | 数据冲突 | 该名称已被使用 |
+| E101 | 409 | 状态不允许 | 当前无法执行此操作 |
+| E102 | 400 | 资源不足 | 资金不足 |
+| E103 | 424 | 条件不满足 | 需要先修复设备 |
+| E104 | 429 | 冷却中 | 请等待 X 秒后重试 |
+| E201 | 503 | LLM不可用 | 盼盼思考中，请稍后 |
+| E301 | 400 | 版本不兼容 | 存档版本过旧 |
+| E302 | 422 | 存档损坏 | 存档数据已损坏 |
+| E429 | 429 | 请求过多 | 操作太频繁 |
+| E500 | 500 | 内部错误 | 发生未知错误 |
 
 ---
 
@@ -912,6 +1223,594 @@ impl Default for PanpanState {
         }
     }
 }
+```
+
+### 5.10 对话系统设计
+
+#### 5.10.1 设计理念
+
+对话系统是玩家与盼盼交流的核心渠道。所有玩家与盼盼的互动都通过对话完成，包括：
+- 下达经营指令
+- 询问小馆状态
+- 聊天增进感情
+- 触发记忆碎片
+- 事件决策讨论
+
+#### 5.10.2 对话消息结构
+
+```rust
+/// 对话消息
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DialogueMessage {
+    pub id: Uuid,
+    pub save_id: Uuid,
+    pub sender: DialogueSender,
+    pub content: String,
+    pub timestamp: DateTime<Utc>,
+    pub message_type: MessageType,
+
+    /// 消息状态（仅对玩家消息有效）
+    pub status: MessageStatus,
+
+    /// 关联的游戏实体
+    pub related_entity: Option<EntityReference>,
+
+    /// LLM 上下文
+    pub llm_context: Option<LlmContextData>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DialogueSender {
+    /// 玩家（来自火星）
+    Player { location: PlayerLocation },
+    /// 盼盼（来自地球）
+    Panpan { mood: Emotion, location: Location },
+    /// 系统消息
+    System { message_category: SystemMessageCategory },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PlayerLocation {
+    Mars,
+    Other { name: String },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SystemMessageCategory {
+    Notification,    // 通知
+    Warning,         // 警告
+    Achievement,     // 成就
+    Milestone,       // 里程碑
+    Error,           // 错误
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MessageType {
+    /// 普通聊天
+    Chat,
+
+    /// 指令类消息
+    Command {
+        command_type: CommandType,
+        parsed_intent: Option<ParsedIntent>,
+    },
+
+    /// 汇报类消息（盼盼主动）
+    Report { report_type: ReportType },
+
+    /// 询问类消息
+    Query { query_subject: String },
+
+    /// 事件相关
+    Event {
+        event_id: Uuid,
+        event_stage: EventStage,
+    },
+
+    /// 记忆碎片触发
+    MemoryTrigger { fragment_id: Uuid },
+
+    /// 决策请求
+    DecisionRequest {
+        decision_id: Uuid,
+        options: Vec<DecisionOption>,
+    },
+
+    /// 决策响应
+    DecisionResponse {
+        decision_id: Uuid,
+        selected_option: Uuid,
+    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MessageStatus {
+    Sent,                              // 已发送，等待传输
+    InTransit { arrive_at: DateTime<Utc> }, // 传输中
+    Arrived,                          // 已到达盼盼
+    Processing,                       // 盼盼正在处理
+    Executed,                         // 已执行
+    Failed { reason: String },        // 执行失败
+    Rejected { reason: String },      // 被盼盼拒绝
+    Modified { modification: String },// 被盼盼修改后执行
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CommandType {
+    // 经营指令
+    OpenShop,
+    CloseShop,
+    UpdateMenu,
+    SetPrice,
+    PurchaseSupplies,
+    // 种植指令
+    PlantCrop,
+    WaterCrop,
+    HarvestCrop,
+    // 旅行指令
+    StartTravel,
+    CancelTravel,
+    // 实验指令
+    StartExperiment,
+    AdjustRecipe,
+    // 维修指令
+    RepairFacility,
+    UpgradeFacility,
+    // 社交指令
+    VisitNeighbor,
+    SendGift,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ReportType {
+    DailySummary,       // 每日简报
+    MorningBriefing,    // 早间汇报
+    EveningReport,      // 晚间汇报
+    TravelLog,          // 旅行日志
+    ExperimentResult,   // 实验结果
+    EmergencyAlert,     // 紧急警报
+    MemoryRecovery,     // 记忆恢复
+    MilestoneAchieved,  // 里程碑达成
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum EventStage {
+    Started,
+    WaitingDecision,
+    DecisionMade,
+    Completed,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EntityReference {
+    pub entity_type: EntityType,
+    pub entity_id: Uuid,
+    pub entity_name: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum EntityType {
+    Recipe,
+    Customer,
+    Facility,
+    Crop,
+    Travel,
+    Event,
+    Memory,
+    Neighbor,
+    Item,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ParsedIntent {
+    pub understood: bool,
+    pub intent: String,
+    pub entities: Vec<ExtractedEntity>,
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExtractedEntity {
+    pub entity_type: String,
+    pub value: String,
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LlmContextData {
+    pub prompt_tokens: u32,
+    pub response_tokens: u32,
+}
+```
+
+#### 5.10.3 对话上下文管理
+
+```rust
+/// 对话上下文
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DialogueContext {
+    pub save_id: Uuid,
+
+    /// 对话历史（最近 N 条）
+    pub history: VecDeque<DialogueMessage>,
+
+    /// 当前活跃话题
+    pub active_topic: Option<ActiveTopic>,
+
+    /// 待处理的决策
+    pub pending_decisions: Vec<PendingDecision>,
+
+    /// 对话统计
+    pub statistics: DialogueStatistics,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ActiveTopic {
+    pub topic_type: TopicType,
+    pub started_at: DateTime<Utc>,
+    pub related_entity: Option<EntityReference>,
+    pub message_count: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum TopicType {
+    ShopManagement,     // 小馆经营
+    Travel,             // 旅行计划
+    Recipe,             // 菜谱讨论
+    Garden,             // 种植话题
+    Memory,             // 记忆回忆
+    DailyChat,          // 日常闲聊
+    Event,              // 事件处理
+    Neighbor,           // 邻里关系
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PendingDecision {
+    pub decision_id: Uuid,
+    pub decision_type: DecisionType,
+    pub description: String,
+    pub options: Vec<DecisionOption>,
+    pub deadline: DateTime<Utc>,
+    pub urgency: DecisionUrgency,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DecisionType {
+    TravelDestination,  // 选择旅行目的地
+    EventResponse,      // 事件响应
+    RecipeExperiment,   // 实验策略
+    CustomerIssue,      // 顾客问题
+    SupplyOrder,        // 订单决策
+    FacilityUpgrade,    // 设施升级选择
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DecisionOption {
+    pub id: Uuid,
+    pub label: String,
+    pub description: String,
+    pub consequences: Vec<PredictedConsequence>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PredictedConsequence {
+    pub consequence_type: String,
+    pub description: String,
+    pub probability: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DecisionUrgency {
+    Low,        // 24小时内
+    Medium,     // 12小时内
+    High,       // 4小时内
+    Critical,   // 1小时内
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DialogueStatistics {
+    pub total_messages: u32,
+    pub player_messages: u32,
+    pub panpan_messages: u32,
+    pub commands_sent: u32,
+    pub commands_executed: u32,
+    pub commands_rejected: u32,
+    pub decisions_made: u32,
+    pub average_response_time_seconds: f32,
+    pub last_message_at: Option<DateTime<Utc>>,
+}
+```
+
+#### 5.10.4 对话流程管理
+
+```rust
+/// 对话系统管理器
+pub struct DialogueManager {
+    context: DialogueContext,
+    llm_manager: Arc<LlmManager>,
+    delay_calculator: Arc<CommunicationSystem>,
+}
+
+impl DialogueManager {
+    /// 处理玩家消息
+    pub async fn process_player_message(
+        &mut self,
+        content: String,
+        message_type: MessageType,
+    ) -> Result<DialogueMessage, GameError> {
+        // 1. 创建消息
+        let message = DialogueMessage {
+            id: Uuid::new_v4(),
+            save_id: self.context.save_id,
+            sender: DialogueSender::Player {
+                location: PlayerLocation::Mars,
+            },
+            content: content.clone(),
+            timestamp: Utc::now(),
+            message_type: message_type.clone(),
+            status: MessageStatus::Sent,
+            related_entity: None,
+            llm_context: None,
+        };
+
+        // 2. 计算通信延迟
+        let delay_minutes = self.delay_calculator.calculate_total_delay();
+        let arrive_at = Utc::now() + Duration::minutes(delay_minutes as i64);
+
+        // 3. 根据消息类型处理
+        match message_type {
+            MessageType::Command { .. } => {
+                self.process_command_message(message.clone(), arrive_at).await
+            }
+            MessageType::Chat => {
+                self.process_chat_message(message.clone(), arrive_at).await
+            }
+            MessageType::Query { .. } => {
+                self.process_query_message(message.clone(), arrive_at).await
+            }
+            MessageType::DecisionResponse { .. } => {
+                self.process_decision_response(message.clone()).await
+            }
+            _ => Ok(message),
+        }
+    }
+
+    /// 处理指令类消息
+    async fn process_command_message(
+        &mut self,
+        mut message: DialogueMessage,
+        arrive_at: DateTime<Utc>,
+    ) -> Result<DialogueMessage, GameError> {
+        // 解析指令意图
+        let parsed = self.parse_command_intent(&message.content).await?;
+
+        // 更新消息类型
+        if let MessageType::Command { command_type, .. } = &mut message.message_type {
+            *command_type = parsed.command_type.clone();
+        }
+        if let MessageType::Command { parsed_intent, .. } = &mut message.message_type {
+            *parsed_intent = Some(parsed.clone());
+        }
+
+        // 更新状态为传输中
+        message.status = MessageStatus::InTransit { arrive_at };
+
+        // 存入延迟队列
+        self.queue_delayed_command(message.clone(), arrive_at);
+
+        // 添加到历史
+        self.context.history.push_back(message.clone());
+        self.context.statistics.player_messages += 1;
+        self.context.statistics.commands_sent += 1;
+
+        Ok(message)
+    }
+
+    /// 处理聊天类消息
+    async fn process_chat_message(
+        &mut self,
+        mut message: DialogueMessage,
+        arrive_at: DateTime<Utc>,
+    ) -> Result<DialogueMessage, GameError> {
+        // 生成盼盼的响应
+        let panpan_response = self.generate_panpan_chat_response(&message).await?;
+
+        // 更新状态
+        message.status = MessageStatus::Arrived;
+        message.llm_context = Some(LlmContextData {
+            prompt_tokens: panpan_response.prompt_tokens,
+            response_tokens: panpan_response.response_tokens,
+        });
+
+        self.context.history.push_back(message.clone());
+        self.context.statistics.player_messages += 1;
+
+        Ok(message)
+    }
+
+    /// 生成盼盼的聊天响应
+    async fn generate_panpan_chat_response(
+        &mut self,
+        player_message: &DialogueMessage,
+    ) -> Result<PanpanResponse, GameError> {
+        // 构建上下文
+        let context = self.build_llm_context();
+
+        // 调用 LLM
+        let response = self.llm_manager
+            .generate_chat_response(player_message, &context)
+            .await?;
+
+        // 创建盼盼的响应消息
+        let panpan_message = DialogueMessage {
+            id: Uuid::new_v4(),
+            save_id: self.context.save_id,
+            sender: DialogueSender::Panpan {
+                mood: response.suggested_mood.clone(),
+                location: Location::Shop,
+            },
+            content: response.content.clone(),
+            timestamp: Utc::now(),
+            message_type: MessageType::Chat,
+            status: MessageStatus::Executed,
+            related_entity: None,
+            llm_context: Some(LlmContextData {
+                prompt_tokens: response.prompt_tokens,
+                response_tokens: response.response_tokens,
+            }),
+        };
+
+        // 添加到历史
+        self.context.history.push_back(panpan_message);
+        self.context.statistics.panpan_messages += 1;
+
+        Ok(response)
+    }
+
+    /// 解析指令意图
+    async fn parse_command_intent(&self, content: &str) -> Result<ParsedIntentWithCommand, GameError> {
+        let intent = self.llm_manager.parse_intent(content).await?;
+
+        Ok(ParsedIntentWithCommand {
+            command_type: intent.command_type,
+            understood: intent.understood,
+            intent: intent.intent,
+            entities: intent.entities.into_iter().map(|e| ExtractedEntity {
+                entity_type: e.entity_type,
+                value: e.value,
+                confidence: e.confidence,
+            }).collect(),
+            confidence: intent.confidence,
+        })
+    }
+
+    /// 构建 LLM 上下文
+    fn build_llm_context(&self) -> LlmPromptContext {
+        LlmPromptContext {
+            recent_history: self.context.history.iter().rev().take(10).cloned().collect(),
+            active_topic: self.context.active_topic.clone(),
+            pending_decisions: self.context.pending_decisions.clone(),
+        }
+    }
+
+    /// 将指令加入延迟队列
+    fn queue_delayed_command(&mut self, message: DialogueMessage, arrive_at: DateTime<Utc>) {
+        // 实现延迟队列逻辑
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LlmPromptContext {
+    pub recent_history: Vec<DialogueMessage>,
+    pub active_topic: Option<ActiveTopic>,
+    pub pending_decisions: Vec<PendingDecision>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PanpanResponse {
+    pub content: String,
+    pub suggested_mood: Emotion,
+    pub trust_change: i32,
+    pub prompt_tokens: u32,
+    pub response_tokens: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ParsedIntentWithCommand {
+    pub command_type: CommandType,
+    pub understood: bool,
+    pub intent: String,
+    pub entities: Vec<ExtractedEntity>,
+    pub confidence: f32,
+}
+```
+
+#### 5.10.5 对话数据库表
+
+```sql
+-- 对话消息表
+CREATE TABLE dialogue_messages (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    sender_type TEXT NOT NULL,         -- Player/Panpan/System
+    sender_detail TEXT NOT NULL,       -- JSON
+    content TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    message_type TEXT NOT NULL,        -- JSON
+    status TEXT NOT NULL,
+    related_entity TEXT,               -- JSON
+    llm_context TEXT,                  -- JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+CREATE INDEX idx_dialogue_save ON dialogue_messages(save_id);
+CREATE INDEX idx_dialogue_timestamp ON dialogue_messages(save_id, timestamp);
+CREATE INDEX idx_dialogue_sender ON dialogue_messages(save_id, sender_type);
+
+-- 待处理决策表
+CREATE TABLE pending_decisions (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    decision_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    options TEXT NOT NULL,             -- JSON
+    deadline TEXT NOT NULL,
+    urgency TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT,
+    selected_option TEXT,
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+CREATE INDEX idx_decisions_save ON pending_decisions(save_id);
+CREATE INDEX idx_decisions_deadline ON pending_decisions(save_id, deadline);
+```
+
+#### 5.10.6 对话 API
+
+```
+# 发送消息给盼盼
+POST /api/v1/saves/:id/dialogue/send
+Body: {
+    "content": "盼盼，今天店里生意怎么样？",
+    "message_type": { "Chat": {} }
+}
+Response: {
+    "message_id": "uuid",
+    "status": "Sent",
+    "estimated_arrival": "2024-01-15T10:30:00Z",
+    "delay_minutes": 8
+}
+
+# 获取对话历史
+GET /api/v1/saves/:id/dialogue/history
+Query: ?limit=50&before=uuid
+Response: {
+    "messages": [DialogueMessage],
+    "has_more": true
+}
+
+# 获取待处理决策
+GET /api/v1/saves/:id/dialogue/decisions
+Response: {
+    "pending_decisions": [PendingDecision],
+    "urgent_count": 2
+}
+
+# 做出决策
+POST /api/v1/saves/:id/dialogue/decisions/:decision_id/respond
+Body: {
+    "selected_option": "uuid",
+    "comment": "选这个吧，看起来不错"
+}
+Response: {
+    "success": true,
+    "panpan_reaction": "好的主人，我会按您的决定去做！"
+}
+
+# 获取对话统计
+GET /api/v1/saves/:id/dialogue/statistics
+Response: DialogueStatistics
 ```
 
 ---
@@ -2002,11 +2901,20 @@ pub struct Greenhouse {
 /// 作物类别
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CropCategory {
-    Vegetable,    // 蔬菜（2-4天）
-    Herb,         // 香料（3-5天）
-    Flower,       // 花卉（4-7天）
-    Special,      // 特殊作物（不定）
-    Exotic,       // 异星作物（旅行带回）
+    Vegetable,    // 蔬菜（2-4天）：烹饪核心食材
+    Herb,         // 香料（3-5天）：烹饪调味，工坊制作
+    Flower,       // 花卉（4-7天）：装饰餐厅，赠送顾客
+    Special,      // 特殊作物（不定）：与事件/记忆碎片相关
+    Exotic,       // 异星作物（旅行带回）：稀有菜谱材料
+}
+
+/// 作物稀有度
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CropRarity {
+    Common,     // 普通：可购买，常见
+    Uncommon,   // 少见：邻里赠送，部分旅行
+    Rare,       // 稀有：特殊旅行，事件奖励
+    Legendary,  // 传说：祖父遗产，隐藏事件
 }
 
 /// 作物定义
@@ -2014,34 +2922,345 @@ pub enum CropCategory {
 pub struct CropType {
     pub id: Uuid,
     pub name: String,
+    pub description: String,
     pub category: CropCategory,
-    pub growth_days: u32,           // 基础生长天数
-    pub seasons: Vec<Season>,       // 适宜季节
-    pub base_yield: u32,            // 基础产量（5份）
-    pub max_yield: u32,             // 最大产量（15份）
-    pub seed_price: Decimal,
+    pub rarity: CropRarity,
+
+    // 生长相关
+    pub growth_stages: GrowthStages,   // 各阶段持续时间
+    pub seasons: Vec<Season>,          // 适宜季节
+    pub ideal_temperature: (i32, i32), // 理想温度范围（摄氏度）
+    pub water_need: WaterNeed,         // 需水量等级
+    pub fertilizer_need: FertilizerNeed, // 需肥量等级
+
+    // 产量相关
+    pub base_yield: u32,               // 基础产量
+    pub max_yield: u32,                // 最大产量
+    pub can_save_seed: bool,           // 是否可留种
+    pub save_seed_skill_level: u32,    // 留种所需园艺等级
+
+    // 经济相关
+    pub seed_price: Decimal,           // 种子购买价格
+    pub sale_price: Decimal,           // 售卖单价
+
+    // 用途
     pub uses: Vec<CropUse>,
+    pub related_recipes: Vec<Uuid>,    // 关联菜谱ID
+    pub related_events: Vec<String>,   // 关联事件
+}
+
+/// 生长阶段定义
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GrowthStages {
+    pub sowing_hours: u32,        // 播种期（小时）
+    pub germinating_hours: u32,   // 发芽期（小时）
+    pub growing_hours: u32,       // 生长期（小时）
+    pub mature_hours: u32,        // 成熟期（可收获持续时间）
+    pub withering_hours: u32,     // 枯萎期（产量逐渐下降）
+}
+
+impl GrowthStages {
+    /// 总生长周期（小时）
+    pub fn total_cycle(&self) -> u32 {
+        self.sowing_hours + self.germinating_hours + self.growing_hours
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum WaterNeed {
+    Low,      // 少：每天0.5次（花卉为主）
+    Medium,   // 中：每天1次（大部分作物）
+    High,     // 高：每天2次（蔬菜为主）
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FertilizerNeed {
+    Low,      // 每周期消耗5肥力
+    Medium,   // 每周期消耗10肥力
+    High,     // 每周期消耗20肥力
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CropUse {
-    Cooking { quality_bonus: f32 },     // 烹饪：品质加成
-    Gift { favor_bonus: u32 },          // 赠送：好感度加成
-    Decoration { atmosphere_bonus: u32 },// 装饰：氛围加成
-    Sale { price: Decimal },            // 售卖：售价
-    Crafting { item_unlock: String },   // 制作：解锁物品
+    Cooking {
+        quality_bonus: f32,       // 烹饪品质加成
+        freshness_decay: f32,     // 新鲜度对品质的影响
+    },
+    Gift {
+        favor_bonus: u32,         // 好感度加成
+        preferred_by: Vec<String>,// 喜欢此作物的角色
+    },
+    Decoration {
+        atmosphere_bonus: u32,    // 氛围加成
+        duration_days: u32,       // 持续天数
+    },
+    Sale {
+        price: Decimal,           // 售价
+    },
+    Crafting {
+        item_unlocks: Vec<String>,// 解锁的工坊配方
+    },
 }
 
 /// 作物实例（收获后）
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HarvestedCrop {
+    pub id: Uuid,
     pub crop_type_id: Uuid,
     pub name: String,
     pub quantity: u32,
-    pub quality: u32,               // 1-5星
-    pub freshness: f32,             // 0-1
+    pub quality: u32,               // 1-5星（受种子品质+种植过程影响）
+    pub freshness: f32,             // 0-1（随时间衰减）
     pub harvested_at: DateTime<Utc>,
+    pub source_plot: Uuid,          // 收获自哪块菜地
 }
+
+impl HarvestedCrop {
+    /// 计算当前品质（受新鲜度影响）
+    pub fn current_quality(&self) -> u32 {
+        let quality_decay = (1.0 - self.freshness) * 2.0; // 新鲜度影响
+        (self.quality as f32 - quality_decay).max(1.0) as u32
+    }
+
+    /// 是否可用于烹饪
+    pub fn can_cook(&self) -> bool {
+        self.freshness > 0.3
+    }
+
+    /// 是否适合赠送
+    pub fn can_gift(&self) -> bool {
+        self.freshness > 0.5 && self.quality >= 3
+    }
+}
+```
+
+#### 6.6.3.1 种子系统详细设计
+
+```rust
+/// 种子定义
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Seed {
+    pub id: Uuid,
+    pub crop_type_id: Uuid,
+    pub name: String,
+    pub quality: u32,               // 1-5星（影响作物品质上限）
+    pub origin: SeedOrigin,         // 产地/来源
+    pub can_save: bool,             // 是否可留种
+    pub quantity: u32,              // 数量
+    pub obtained_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SeedOrigin {
+    Initial,                        // 初始赠送（祖父遗产）
+    Purchased {                     // 购买
+        shop_name: String,
+        price: Decimal,
+    },
+    NeighborGift {                  // 邻居赠送
+        neighbor_name: String,
+        reason: String,             // 赠送原因
+    },
+    TravelBrought {                 // 旅行带回
+        location: String,
+        traveler_notes: String,     // 盼盼的旅行笔记
+    },
+    EventReward {                   // 事件奖励
+        event_name: String,
+    },
+    SelfSaved {                     // 自留种
+        from_harvest_id: Uuid,
+        saved_at: DateTime<Utc>,
+    },
+}
+
+/// 种子库存
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SeedInventory {
+    pub seeds: Vec<SeedStack>,
+    pub capacity: u32,              // 容量（受工具房等级影响）
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SeedStack {
+    pub crop_type_id: Uuid,
+    pub name: String,
+    pub seeds: Vec<Seed>,           // 同类种子按品质分组
+    pub total_quantity: u32,
+}
+
+impl SeedInventory {
+    /// 添加种子
+    pub fn add_seed(&mut self, seed: Seed) -> Result<(), String> {
+        if self.total_count() >= self.capacity {
+            return Err("种子库存已满".to_string());
+        }
+
+        // 尝试合并到现有堆栈
+        if let Some(stack) = self.seeds.iter_mut().find(|s| s.crop_type_id == seed.crop_type_id) {
+            stack.seeds.push(seed.clone());
+            stack.total_quantity += seed.quantity;
+        } else {
+            self.seeds.push(SeedStack {
+                crop_type_id: seed.crop_type_id,
+                name: seed.name.clone(),
+                seeds: vec![seed.clone()],
+                total_quantity: seed.quantity,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// 获取最佳品质种子
+    pub fn get_best_seed(&self, crop_type_id: Uuid) -> Option<&Seed> {
+        self.seeds
+            .iter()
+            .find(|s| s.crop_type_id == crop_type_id)
+            .and_then(|stack| stack.seeds.iter().max_by_key(|s| s.quality))
+    }
+
+    fn total_count(&self) -> u32 {
+        self.seeds.iter().map(|s| s.total_quantity).sum()
+    }
+}
+
+/// 留种系统
+pub struct SeedSavingSystem;
+
+impl SeedSavingSystem {
+    /// 尝试留种
+    pub fn try_save_seed(
+        harvest: &HarvestedCrop,
+        gardening_level: u32,
+        crop_type: &CropType,
+    ) -> Result<Seed, SeedSaveError> {
+        // 检查是否可留种
+        if !crop_type.can_save_seed {
+            return Err(SeedSaveError::CannotSaveSeed);
+        }
+
+        // 检查园艺等级
+        if gardening_level < crop_type.save_seed_skill_level {
+            return Err(SeedSaveError::SkillTooLow {
+                required: crop_type.save_seed_skill_level,
+                current: gardening_level,
+            });
+        }
+
+        // 计算留种成功率和品质
+        let success_rate = 0.5 + (gardening_level as f32 * 0.05);
+        if rand::random::<f32>() > success_rate {
+            return Err(SeedSaveError::Failed);
+        }
+
+        // 种子品质 = 收获品质 * (0.8~1.0)
+        let seed_quality = (harvest.quality as f32 * (0.8 + rand::random::<f32>() * 0.2)).min(5.0) as u32;
+
+        Ok(Seed {
+            id: Uuid::new_v4(),
+            crop_type_id: harvest.crop_type_id,
+            name: format!("{}种子", harvest.name),
+            quality: seed_quality,
+            origin: SeedOrigin::SelfSaved {
+                from_harvest_id: harvest.id,
+                saved_at: Utc::now(),
+            },
+            can_save: true,
+            quantity: 1,
+            obtained_at: Utc::now(),
+        })
+    }
+}
+
+#[derive(Debug)]
+pub enum SeedSaveError {
+    CannotSaveSeed,
+    SkillTooLow { required: u32, current: u32 },
+    Failed,
+}
+```
+
+#### 6.6.3.2 作物数据库定义
+
+```sql
+-- 作物类型表
+CREATE TABLE crop_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    category TEXT NOT NULL,
+    rarity TEXT NOT NULL,
+
+    -- 生长参数
+    sowing_hours INTEGER NOT NULL DEFAULT 6,
+    germinating_hours INTEGER NOT NULL DEFAULT 12,
+    growing_hours INTEGER NOT NULL DEFAULT 24,
+    mature_hours INTEGER NOT NULL DEFAULT 48,
+    withering_hours INTEGER NOT NULL DEFAULT 24,
+    seasons TEXT NOT NULL,           -- JSON 数组
+    ideal_temp_min INTEGER NOT NULL DEFAULT 15,
+    ideal_temp_max INTEGER NOT NULL DEFAULT 30,
+    water_need TEXT NOT NULL DEFAULT 'Medium',
+    fertilizer_need TEXT NOT NULL DEFAULT 'Medium',
+
+    -- 产量
+    base_yield INTEGER NOT NULL DEFAULT 5,
+    max_yield INTEGER NOT NULL DEFAULT 15,
+    can_save_seed INTEGER NOT NULL DEFAULT 1,
+    save_seed_skill_level INTEGER NOT NULL DEFAULT 4,
+
+    -- 经济
+    seed_price TEXT NOT NULL,
+    sale_price TEXT NOT NULL,
+
+    -- 用途
+    uses TEXT NOT NULL,              -- JSON
+    related_recipes TEXT,            -- JSON 数组
+    related_events TEXT              -- JSON 数组
+);
+
+-- 初始作物数据
+INSERT INTO crop_types (id, name, description, category, rarity,
+    sowing_hours, germinating_hours, growing_hours, mature_hours, withering_hours,
+    seasons, water_need, fertilizer_need, base_yield, max_yield, seed_price, sale_price, uses)
+VALUES
+-- 番茄
+('tomato-001', '番茄', '红彤彤的番茄，是厨房的万能食材', 'Vegetable', 'Common',
+    6, 12, 24, 48, 24,
+    '["Spring","Summer","Autumn"]', 'Medium', 'Medium', 6, 12, '5.00', '3.00',
+    '[{"Cooking":{"quality_bonus":0.1,"freshness_decay":0.15}},{"Gift":{"favor_bonus":5,"preferred_by":["李大爷"]}},{"Sale":{"price":"3.00"}}]'),
+
+-- 薄荷
+('mint-001', '薄荷', '清新的薄荷，泡茶调味两相宜', 'Herb', 'Common',
+    8, 16, 36, 72, 36,
+    '["Spring","Summer","Autumn"]', 'Low', 'Low', 4, 8, '8.00', '5.00',
+    '[{"Cooking":{"quality_bonus":0.15,"freshness_decay":0.1}},{"Crafting":{"item_unlocks":["薄荷香皂","薄荷茶"]}}]'),
+
+-- 茉莉
+('jasmine-001', '茉莉', '芬芳的茉莉花，老街的记忆', 'Flower', 'Uncommon',
+    12, 24, 72, 120, 48,
+    '["Spring","Summer"]', 'Low', 'Low', 3, 6, '15.00', '10.00',
+    '[{"Decoration":{"atmosphere_bonus":3,"duration_days":5}},{"Gift":{"favor_bonus":15,"preferred_by":["王奶奶"]}},{"Crafting":{"item_unlocks":["干花书签","茉莉花茶"]}}]'),
+
+-- 祖父的玫瑰
+('grandpa-rose-001', '祖父的玫瑰', '祖父生前最珍视的玫瑰，承载着深藏的记忆', 'Special', 'Legendary',
+    24, 48, 120, 168, 72,
+    '["Spring","Summer","Autumn"]', 'Medium', 'High', 2, 4, '0.00', '0.00',
+    '[{"Decoration":{"atmosphere_bonus":8,"duration_days":7}},{"Gift":{"favor_bonus":30,"preferred_by":["王奶奶","张婶"]}}]');
+
+-- 种子库存表
+CREATE TABLE seed_inventory (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    crop_type_id TEXT NOT NULL,
+    quality INTEGER NOT NULL DEFAULT 3,
+    origin TEXT NOT NULL,            -- JSON
+    quantity INTEGER NOT NULL DEFAULT 1,
+    obtained_at TEXT NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (crop_type_id) REFERENCES crop_types(id)
+);
 ```
 
 #### 6.6.4 种植计算系统
@@ -2229,6 +3448,1743 @@ impl ShopSystem {
         }
     }
 }
+```
+
+#### 6.6.7 病虫害系统
+
+种植系统包含动态的病虫害机制，需要盼盼定期检查和处理。
+
+```rust
+/// 病虫害类型
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PestDisease {
+    // 虫害
+    Aphids,           // 蚜虫：吸食汁液，生长减缓
+    Caterpillars,     // 毛虫：啃食叶片，健康度下降
+    Mites,            // 螨虫：影响品质
+    Whiteflies,       // 白粉虱：传播病害
+
+    // 病害
+    PowderyMildew,    // 白粉病：影响光合作用
+    RootRot,          // 根腐病：过度浇水导致
+    LeafSpot,         // 叶斑病：影响外观和健康
+    Blight,           // 枯萎病：严重时可致死
+
+    // 环境问题
+    NutrientDeficiency, // 缺肥：生长缓慢
+    Sunburn,            // 日灼：夏季强光
+    Frostbite,          // 冻伤：冬季低温
+}
+
+/// 病虫害严重程度
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Severity {
+    None,           // 无
+    Mild,           // 轻微（5% 影响）
+    Moderate,       // 中等（15% 影响）
+    Severe,         // 严重（30% 影响）
+    Critical,       // 危急（50% 影响，可能死亡）
+}
+
+/// 作物健康状态
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CropHealthStatus {
+    pub current_issues: Vec<(PestDisease, Severity)>,
+    pub last_check: DateTime<Utc>,
+    pub treatment_history: Vec<TreatmentRecord>,
+}
+
+/// 治疗记录
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TreatmentRecord {
+    pub applied_at: DateTime<Utc>,
+    pub treatment: Treatment,
+    pub effectiveness: f32,
+}
+
+/// 治疗方法
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Treatment {
+    // 物理方法
+    ManualRemoval,      // 人工清除（耗能高）
+    Pruning,            // 修剪病叶
+
+    // 自然方法
+    NeemOil,            // 印楝油（天然杀虫剂）
+    SoapyWater,         // 肥皂水
+    CompanionPlanting,  // 伴生种植（预防）
+
+    // 化学方法（邻居提供）
+    OrganicPesticide,   // 有机农药
+    Fungicide,          // 杀菌剂
+
+    // 环境调整
+    AdjustWatering,     // 调整浇水
+    ImproveDrainage,    // 改善排水
+    AddNutrients,       // 补充营养
+}
+
+/// 病虫害管理器
+pub struct PestDiseaseManager;
+
+impl PestDiseaseManager {
+    /// 检查作物健康（盼盼执行）
+    pub fn check_crop_health(crop: &GrowingCrop, sensor_level: u32) -> CropHealthStatus {
+        let detection_chance = 0.3 + sensor_level as f32 * 0.1;
+        let mut detected_issues = Vec::new();
+
+        // 根据作物状态随机检测问题
+        if crop.health < 70 {
+            if rand::random::<f32>() < detection_chance {
+                detected_issues.push((PestDisease::NutrientDeficiency, Severity::Mild));
+            }
+        }
+
+        // 检查是否有未处理的问题
+        if let Some(existing) = &crop.health_status {
+            for (issue, severity) in &existing.current_issues {
+                // 问题可能恶化
+                let worsening_chance = 0.1 * severity.multiplier();
+                if rand::random::<f32>() < worsening_chance {
+                    detected_issues.push((issue.clone(), severity.escalate()));
+                } else {
+                    detected_issues.push((issue.clone(), severity.clone()));
+                }
+            }
+        }
+
+        CropHealthStatus {
+            current_issues: detected_issues,
+            last_check: Utc::now(),
+            treatment_history: crop.health_status.as_ref()
+                .map(|h| h.treatment_history.clone())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// 应用治疗
+    pub fn apply_treatment(
+        crop: &mut GrowingCrop,
+        treatment: Treatment,
+        gardening_level: u32,
+    ) -> TreatmentResult {
+        let base_effectiveness = treatment.base_effectiveness();
+        let skill_bonus = gardening_level as f32 * 0.05;
+        let final_effectiveness = (base_effectiveness + skill_bonus).min(0.95);
+
+        // 移除或减轻问题
+        crop.health_status.as_mut().map(|status| {
+            status.current_issues.retain(|(_, severity)| {
+                if rand::random::<f32>() < final_effectiveness {
+                    // 治疗成功
+                    false
+                } else {
+                    true
+                }
+            });
+            status.treatment_history.push(TreatmentRecord {
+                applied_at: Utc::now(),
+                treatment: treatment.clone(),
+                effectiveness: final_effectiveness,
+            });
+            status
+        });
+
+        // 恢复健康度
+        crop.health = (crop.health + (final_effectiveness * 20.0) as u32).min(100);
+
+        TreatmentResult {
+            success: final_effectiveness > 0.5,
+            effectiveness: final_effectiveness,
+            energy_cost: treatment.energy_cost(),
+        }
+    }
+
+    /// 随机发生病虫害（每日检查）
+    pub fn random_pest_occurrence(
+        crop: &GrowingCrop,
+        season: Season,
+        weather: Weather,
+    ) -> Option<(PestDisease, Severity)> {
+        // 基础发生概率
+        let base_chance = 0.02;
+
+        // 季节修正
+        let season_mod = match season {
+            Season::Spring => 1.2,  // 春季虫害多发
+            Season::Summer => 1.5,  // 夏季虫害最严重
+            Season::Autumn => 0.8,  // 秋季减少
+            Season::Winter => 0.3,  // 冬季极少
+        };
+
+        // 天气修正
+        let weather_mod = match weather {
+            Weather::Rainy => 1.3,   // 雨天病害多发
+            Weather::Stormy => 1.5,  // 暴风雨后更严重
+            Weather::Sunny => 0.8,   // 晴天较少
+            _ => 1.0,
+        };
+
+        let final_chance = base_chance * season_mod * weather_mod;
+
+        if rand::random::<f32>() < final_chance {
+            // 随机选择病虫害类型
+            let pest = Self::random_pest_by_season(season);
+            let severity = Self::random_severity();
+            Some((pest, severity))
+        } else {
+            None
+        }
+    }
+
+    fn random_pest_by_season(season: Season) -> PestDisease {
+        match season {
+            Season::Spring => {
+                let options = [PestDisease::Aphids, PestDisease::Caterpillars, PestDisease::PowderyMildew];
+                options[rand::random::<usize>() % options.len()].clone()
+            }
+            Season::Summer => {
+                let options = [PestDisease::Mites, PestDisease::Whiteflies, PestDisease::Sunburn, PestDisease::Blight];
+                options[rand::random::<usize>() % options.len()].clone()
+            }
+            Season::Autumn => {
+                let options = [PestDisease::LeafSpot, PestDisease::RootRot];
+                options[rand::random::<usize>() % options.len()].clone()
+            }
+            Season::Winter => {
+                PestDisease::Frostbite
+            }
+        }
+    }
+
+    fn random_severity() -> Severity {
+        let roll = rand::random::<f32>();
+        if roll < 0.6 { Severity::Mild }
+        else if roll < 0.85 { Severity::Moderate }
+        else if roll < 0.95 { Severity::Severe }
+        else { Severity::Critical }
+    }
+}
+
+impl Severity {
+    fn multiplier(&self) -> f32 {
+        match self {
+            Severity::None => 0.0,
+            Severity::Mild => 1.0,
+            Severity::Moderate => 1.5,
+            Severity::Severe => 2.0,
+            Severity::Critical => 3.0,
+        }
+    }
+
+    fn escalate(&self) -> Self {
+        match self {
+            Severity::Mild => Severity::Moderate,
+            Severity::Moderate => Severity::Severe,
+            Severity::Severe => Severity::Critical,
+            Severity::Critical => Severity::Critical,
+            Severity::None => Severity::Mild,
+        }
+    }
+
+    pub fn health_impact(&self) -> u32 {
+        match self {
+            Severity::None => 0,
+            Severity::Mild => 5,
+            Severity::Moderate => 15,
+            Severity::Severe => 30,
+            Severity::Critical => 50,
+        }
+    }
+
+    pub fn growth_penalty(&self) -> f32 {
+        match self {
+            Severity::None => 0.0,
+            Severity::Mild => 0.05,
+            Severity::Moderate => 0.15,
+            Severity::Severe => 0.30,
+            Severity::Critical => 0.50,
+        }
+    }
+}
+
+impl Treatment {
+    fn base_effectiveness(&self) -> f32 {
+        match self {
+            Treatment::ManualRemoval => 0.6,
+            Treatment::Pruning => 0.5,
+            Treatment::NeemOil => 0.75,
+            Treatment::SoapyWater => 0.55,
+            Treatment::CompanionPlanting => 0.4,  // 预防性质
+            Treatment::OrganicPesticide => 0.85,
+            Treatment::Fungicide => 0.9,
+            Treatment::AdjustWatering => 0.7,
+            Treatment::ImproveDrainage => 0.65,
+            Treatment::AddNutrients => 0.8,
+        }
+    }
+
+    fn energy_cost(&self) -> u32 {
+        match self {
+            Treatment::ManualRemoval => 15,
+            Treatment::Pruning => 10,
+            Treatment::NeemOil => 5,
+            Treatment::SoapyWater => 3,
+            Treatment::CompanionPlanting => 8,
+            Treatment::OrganicPesticide => 5,
+            Treatment::Fungicide => 5,
+            Treatment::AdjustWatering => 2,
+            Treatment::ImproveDrainage => 12,
+            Treatment::AddNutrients => 4,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TreatmentResult {
+    pub success: bool,
+    pub effectiveness: f32,
+    pub energy_cost: u32,
+}
+```
+
+#### 6.6.8 天气与季节影响
+
+```rust
+/// 天气对种植的影响详情
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenWeatherEffect {
+    pub growth_modifier: f32,       // 生长速度修正
+    pub water_need_modifier: f32,   // 水分需求修正
+    pub pest_risk_modifier: f32,    // 病虫害风险修正
+    pub health_drain: u32,          // 健康度消耗
+    pub auto_actions: Vec<AutoAction>, // 自动触发的操作
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum AutoAction {
+    SkipWatering,      // 跳过浇水（雨天）
+    EmergencyCover,    // 紧急遮盖（暴风雨）
+    MoveToGreenhouse,  // 移入温室（严寒）
+    ExtraWatering,     // 额外浇水（高温）
+}
+
+impl Weather {
+    /// 天气对种植的详细影响
+    pub fn garden_effect(&self) -> GardenWeatherEffect {
+        match self {
+            Weather::Sunny => GardenWeatherEffect {
+                growth_modifier: 1.1,
+                water_need_modifier: 1.3,
+                pest_risk_modifier: 0.8,
+                health_drain: 0,
+                auto_actions: vec![AutoAction::ExtraWatering],
+            },
+            Weather::Rainy => GardenWeatherEffect {
+                growth_modifier: 0.95,
+                water_need_modifier: 0.0,  // 不需要额外浇水
+                pest_risk_modifier: 1.3,
+                health_drain: 0,
+                auto_actions: vec![AutoAction::SkipWatering],
+            },
+            Weather::Stormy => GardenWeatherEffect {
+                growth_modifier: 0.7,
+                water_need_modifier: 0.0,
+                pest_risk_modifier: 1.5,
+                health_drain: 10,
+                auto_actions: vec![AutoAction::SkipWatering, AutoAction::EmergencyCover],
+            },
+            Weather::Snowy => GardenWeatherEffect {
+                growth_modifier: 0.3,
+                water_need_modifier: 0.5,
+                pest_risk_modifier: 0.2,
+                health_drain: 15,
+                auto_actions: vec![AutoAction::MoveToGreenhouse],
+            },
+            _ => GardenWeatherEffect {
+                growth_modifier: 1.0,
+                water_need_modifier: 1.0,
+                pest_risk_modifier: 1.0,
+                health_drain: 0,
+                auto_actions: vec![],
+            },
+        }
+    }
+}
+
+/// 季节对种植的影响
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SeasonEffect {
+    pub growth_modifier: f32,
+    pub available_crops: Vec<CropCategory>,
+    pub pest_frequency: f32,
+    pub special_events: Vec<String>,
+}
+
+impl Season {
+    pub fn garden_effect(&self) -> SeasonEffect {
+        match self {
+            Season::Spring => SeasonEffect {
+                growth_modifier: 1.1,
+                available_crops: vec![CropCategory::Vegetable, CropCategory::Herb, CropCategory::Flower],
+                pest_frequency: 1.2,
+                special_events: vec!["春耕节".into(), "花朝节".into()],
+            },
+            Season::Summer => SeasonEffect {
+                growth_modifier: 1.0,
+                available_crops: vec![CropCategory::Vegetable, CropCategory::Herb, CropCategory::Flower, CropCategory::Exotic],
+                pest_frequency: 1.5,
+                special_events: vec!["夏日祭".into()],
+            },
+            Season::Autumn => SeasonEffect {
+                growth_modifier: 1.2,  // 秋季最适合种植
+                available_crops: vec![CropCategory::Vegetable, CropCategory::Herb],
+                pest_frequency: 0.8,
+                special_events: vec!["丰收节".into(), "中秋节".into()],
+            },
+            Season::Winter => SeasonEffect {
+                growth_modifier: 0.5,
+                available_crops: vec![],  // 需温室
+                pest_frequency: 0.3,
+                special_events: vec!["冬至".into()],
+            },
+        }
+    }
+}
+```
+
+#### 6.6.9 自动化种植系统
+
+随着后院等级提升，可以解锁自动化功能。
+
+```rust
+/// 自动化种植系统
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenAutomation {
+    pub auto_watering: bool,        // 自动浇水（灌溉系统3级）
+    pub auto_fertilizing: bool,     // 自动施肥（需智能系统）
+    pub auto_pest_check: bool,      // 自动虫害检测（传感器4级）
+    pub auto_harvest: bool,         // 自动收获（需高级机器人）
+    pub schedule: GardenSchedule,   // 种植计划
+}
+
+/// 种植计划
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenSchedule {
+    pub daily_tasks: Vec<ScheduledTask>,
+    pub crop_rotation: Vec<CropRotationEntry>,
+    pub seasonal_plan: SeasonalPlan,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ScheduledTask {
+    pub task_type: ScheduledTaskType,
+    pub preferred_time: u32,        // 小时 (0-23)
+    pub auto_execute: bool,         // 是否自动执行
+    pub last_executed: Option<DateTime<Utc>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ScheduledTaskType {
+    MorningCheck,      // 早间检查
+    Watering,          // 浇水
+    HealthInspection,  // 健康检查
+    EveningHarvest,    // 傍晚收获
+    WeeklyFertilize,   // 每周施肥
+}
+
+/// 轮作计划（保持土壤肥力）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CropRotationEntry {
+    pub plot_id: Uuid,
+    pub crop_history: Vec<Uuid>,    // 历史种植的作物ID
+    pub next_recommended: Option<CropCategory>,
+}
+
+/// 季度种植计划
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SeasonalPlan {
+    pub season: Season,
+    pub planned_crops: Vec<PlannedCrop>,
+    pub estimated_harvest: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PlannedCrop {
+    pub crop_type_id: Uuid,
+    pub plot_assignment: Uuid,
+    pub plant_date: DateTime<Utc>,
+    pub expected_harvest: DateTime<Utc>,
+}
+
+/// 自动化效果
+impl GardenAutomation {
+    /// 检查是否可以自动执行某任务
+    pub fn can_auto_execute(&self, task: &ScheduledTaskType, backyard_level: u32) -> bool {
+        match task {
+            ScheduledTaskType::Watering => {
+                self.auto_watering && backyard_level >= 3
+            }
+            ScheduledTaskType::HealthInspection => {
+                self.auto_pest_check && backyard_level >= 4
+            }
+            ScheduledTaskType::EveningHarvest => {
+                self.auto_harvest && backyard_level >= 5
+            }
+            ScheduledTaskType::WeeklyFertilize => {
+                self.auto_fertilizing && backyard_level >= 4
+            }
+            ScheduledTaskType::MorningCheck => {
+                backyard_level >= 2
+            }
+        }
+    }
+
+    /// 计算自动化节省的能量
+    pub fn energy_savings(&self, task: &ScheduledTaskType) -> u32 {
+        match task {
+            ScheduledTaskType::Watering if self.auto_watering => 5,
+            ScheduledTaskType::HealthInspection if self.auto_pest_check => 8,
+            ScheduledTaskType::EveningHarvest if self.auto_harvest => 5,
+            ScheduledTaskType::WeeklyFertilize if self.auto_fertilizing => 3,
+            _ => 0,
+        }
+    }
+
+    /// 生成每日任务列表
+    pub fn generate_daily_tasks(&self, backyard: &BackyardState) -> Vec<GardenTask> {
+        let mut tasks = Vec::new();
+        let now = Utc::now();
+
+        // 检查每个菜地
+        for plot in &backyard.plots {
+            if let Some(crop) = &plot.current_crop {
+                // 检查是否需要浇水
+                if !crop.watered_today && !self.auto_watering {
+                    tasks.push(GardenTask {
+                        task_type: BackyardAction::Water { plot_ids: vec![plot.id] },
+                        priority: TaskPriority::High,
+                        deadline: now + Duration::hours(12),
+                        energy_cost: 3,
+                    });
+                }
+
+                // 检查是否可以收获
+                if crop.current_stage == GrowthStage::Mature {
+                    tasks.push(GardenTask {
+                        task_type: BackyardAction::Harvest { plot_id: plot.id },
+                        priority: TaskPriority::Medium,
+                        deadline: now + Duration::hours(48),
+                        energy_cost: 5,
+                    });
+                }
+
+                // 检查是否枯萎
+                if crop.current_stage == GrowthStage::Withering {
+                    tasks.push(GardenTask {
+                        task_type: BackyardAction::RemoveWithered { plot_id: plot.id },
+                        priority: TaskPriority::High,
+                        deadline: now + Duration::hours(24),
+                        energy_cost: 3,
+                    });
+                }
+            } else if plot.needs_tilling {
+                // 需要翻土
+                tasks.push(GardenTask {
+                    task_type: BackyardAction::Till { plot_id: plot.id },
+                    priority: TaskPriority::Low,
+                    deadline: now + Duration::days(3),
+                    energy_cost: 10,
+                });
+            }
+        }
+
+        tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
+        tasks
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TaskPriority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenTask {
+    pub task_type: BackyardAction,
+    pub priority: TaskPriority,
+    pub deadline: DateTime<Utc>,
+    pub energy_cost: u32,
+}
+```
+
+#### 6.6.10 种植任务调度
+
+盼盼的种植任务由 LLM 驱动，根据当前状态生成决策。
+
+```rust
+/// 种植系统任务调度器
+pub struct GardenScheduler {
+    automation: GardenAutomation,
+    pending_tasks: VecDeque<GardenTask>,
+    last_check: DateTime<Utc>,
+}
+
+impl GardenScheduler {
+    /// 每小时更新（游戏时间）
+    pub fn hourly_update(&mut self, backyard: &mut BackyardState, context: &PanpanContext) {
+        let now = Utc::now();
+
+        // 检查自动化任务
+        for task in &self.automation.schedule.daily_tasks {
+            if self.automation.can_auto_execute(&task.task_type, backyard.level) {
+                if let Some(last) = task.last_executed {
+                    if now - last >= Duration::hours(24) {
+                        self.execute_auto_task(&task.task_type, backyard);
+                    }
+                }
+            }
+        }
+
+        // 生成新任务
+        let new_tasks = self.automation.generate_daily_tasks(backyard);
+        for task in new_tasks {
+            if !self.pending_tasks.iter().any(|t| t.task_type == task.task_type) {
+                self.pending_tasks.push_back(task);
+            }
+        }
+
+        // 更新作物生长
+        self.update_crop_growth(backyard, context);
+
+        self.last_check = now;
+    }
+
+    /// 执行自动化任务
+    fn execute_auto_task(&self, task_type: &ScheduledTaskType, backyard: &mut BackyardState) {
+        match task_type {
+            ScheduledTaskType::Watering => {
+                // 自动浇水所有需要浇水的菜地
+                for plot in &mut backyard.plots {
+                    if let Some(crop) = &mut plot.current_crop {
+                        crop.watered_today = true;
+                    }
+                }
+            }
+            ScheduledTaskType::HealthInspection => {
+                // 自动健康检查
+                for plot in &mut backyard.plots {
+                    if let Some(crop) = &mut plot.current_crop {
+                        crop.health_status = Some(PestDiseaseManager::check_crop_health(
+                            crop,
+                            context.modules.sensor.level,
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// 更新作物生长
+    fn update_crop_growth(&self, backyard: &mut BackyardState, context: &PanpanContext) {
+        let weather_effect = context.weather.garden_effect();
+        let season_effect = context.season.garden_effect();
+
+        for plot in &mut backyard.plots {
+            if let Some(crop) = &mut plot.current_crop {
+                // 计算生长进度
+                let base_speed = GardenCalculator::calculate_growth_speed(
+                    crop.crop_type.growth_days,
+                    plot.fertility,
+                    backyard.level,
+                    backyard.irrigation.level,
+                    crop.crop_type.seasons.contains(&context.season),
+                    backyard.greenhouse.as_ref().map(|g| g.is_built).unwrap_or(false),
+                );
+
+                // 应用天气和季节修正
+                let final_speed = base_speed
+                    * weather_effect.growth_modifier
+                    * season_effect.growth_modifier;
+
+                // 更新生长阶段进度
+                crop.stage_progress += final_speed / 24.0;  // 每小时进度
+
+                // 检查阶段转换
+                if crop.stage_progress >= 1.0 {
+                    crop.stage_progress = 0.0;
+                    crop.current_stage = crop.current_stage.next();
+                }
+
+                // 应用病虫害影响
+                if let Some(status) = &crop.health_status {
+                    for (_, severity) in &status.current_issues {
+                        crop.health = crop.health.saturating_sub(severity.health_impact() / 24);
+                    }
+                }
+
+                // 应用天气健康消耗
+                crop.health = crop.health.saturating_sub(weather_effect.health_drain / 24);
+            }
+        }
+    }
+
+    /// LLM 决策：是否执行某项种植任务
+    pub async fn decide_garden_action(
+        &self,
+        action: &BackyardAction,
+        llm_manager: &LlmManager,
+        context: &PanpanContext,
+    ) -> GardenDecision {
+        let prompt = format!(
+            "当前后院状态：\n\
+             - 后院等级：{}\n\
+             - 活跃菜地：{} 块\n\
+             - 待处理任务：{} 个\n\
+             - 当前天气：{:?}\n\
+             - 当前季节：{:?}\n\
+             - 盼盼电量：{}%\n\
+             - 盼盼心情：{:?}\n\n\
+             拟执行操作：{:?}\n\n\
+             请决定是否执行此操作，以及执行方式。",
+            context.backyard.level,
+            context.backyard.plots.iter().filter(|p| p.is_unlocked).count(),
+            self.pending_tasks.len(),
+            context.weather,
+            context.season,
+            context.energy.current,
+            context.emotion,
+            action,
+        );
+
+        // 调用 LLM 获取决策
+        llm_manager.generate_garden_decision(&prompt).await
+    }
+}
+
+impl GrowthStage {
+    fn next(&self) -> Self {
+        match self {
+            GrowthStage::Sowing => GrowthStage::Germinating,
+            GrowthStage::Germinating => GrowthStage::Growing,
+            GrowthStage::Growing => GrowthStage::Mature,
+            GrowthStage::Mature => GrowthStage::Withering,
+            GrowthStage::Withering => GrowthStage::Withering,
+        }
+    }
+}
+
+/// 种植决策结果
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenDecision {
+    pub should_execute: bool,
+    pub priority: TaskPriority,
+    pub modifications: Option<String>,
+    pub response_to_player: String,
+    pub mood_change: i32,
+}
+```
+
+#### 6.6.11 种植数据存储
+
+```sql
+-- 种植相关数据库表
+
+-- 作物定义表
+CREATE TABLE crop_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT NOT NULL,
+    growth_days INTEGER NOT NULL,
+    seasons TEXT NOT NULL,           -- JSON 数组
+    base_yield INTEGER NOT NULL,
+    max_yield INTEGER NOT NULL,
+    seed_price TEXT NOT NULL,        -- Decimal as text
+    uses TEXT NOT NULL,              -- JSON 数组
+    description TEXT
+);
+
+-- 菜地表
+CREATE TABLE vegetable_plots (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    plot_number INTEGER NOT NULL,
+    is_unlocked INTEGER NOT NULL DEFAULT 0,
+    soil_level INTEGER NOT NULL DEFAULT 1,
+    fertility INTEGER NOT NULL DEFAULT 50,
+    needs_tilling INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 生长中的作物表
+CREATE TABLE growing_crops (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    plot_id TEXT NOT NULL,
+    crop_type_id TEXT NOT NULL,
+    planted_at TEXT NOT NULL,
+    current_stage TEXT NOT NULL,
+    stage_progress REAL NOT NULL DEFAULT 0.0,
+    health INTEGER NOT NULL DEFAULT 100,
+    watered_today INTEGER NOT NULL DEFAULT 0,
+    fertilized_this_cycle INTEGER NOT NULL DEFAULT 0,
+    health_status TEXT,              -- JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (plot_id) REFERENCES vegetable_plots(id),
+    FOREIGN KEY (crop_type_id) REFERENCES crop_types(id)
+);
+
+-- 种子库存表
+CREATE TABLE seed_inventory (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    crop_type_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (crop_type_id) REFERENCES crop_types(id)
+);
+
+-- 收获记录表
+CREATE TABLE harvest_records (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    crop_type_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL,
+    quality INTEGER NOT NULL,
+    harvested_at TEXT NOT NULL,
+    plot_id TEXT NOT NULL,
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 种植历史表（用于轮作）
+CREATE TABLE planting_history (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    plot_id TEXT NOT NULL,
+    crop_type_id TEXT NOT NULL,
+    planted_at TEXT NOT NULL,
+    harvested_at TEXT,
+    yield_amount INTEGER,
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 堆肥批次表
+CREATE TABLE compost_batches (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ready_at TEXT NOT NULL,
+    expected_yield INTEGER NOT NULL,
+    materials TEXT NOT NULL,         -- JSON
+    FOREIGN KEY (save_id) REFERENCES saves(id)
+);
+
+-- 创建索引
+CREATE INDEX idx_plots_save ON vegetable_plots(save_id);
+CREATE INDEX idx_growing_crops_save ON growing_crops(save_id);
+CREATE INDEX idx_growing_crops_plot ON growing_crops(plot_id);
+CREATE INDEX idx_seeds_save ON seed_inventory(save_id);
+CREATE INDEX idx_harvest_save ON harvest_records(save_id);
+CREATE INDEX idx_planting_history_plot ON planting_history(plot_id);
+```
+
+#### 6.6.11.1 种植日志与报告系统
+
+```rust
+/// 种植日志条目
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenLogEntry {
+    pub timestamp: DateTime<Utc>,
+    pub entry_type: GardenLogType,
+    pub plot_id: Option<Uuid>,
+    pub crop_name: Option<String>,
+    pub description: String,
+    pub panpan_notes: Option<String>,  // 盼盼的备注
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum GardenLogType {
+    Planted,           // 播种
+    Watered,           // 浇水
+    Fertilized,        // 施肥
+    Treated,           // 治疗
+    Grew,              // 生长阶段变化
+    Harvested,         // 收获
+    Withered,          // 枯萎
+    PestFound,         // 发现病虫害
+    WeatherAlert,      // 天气预警
+    Automation,        // 自动化操作
+}
+
+/// 种植报告生成器
+pub struct GardenReportGenerator;
+
+impl GardenReportGenerator {
+    /// 生成每日种植简报
+    pub fn generate_daily_report(
+        backyard: &BackyardState,
+        harvested_crops: &[HarvestedCrop],
+        context: &PanpanContext,
+    ) -> GardenDailyReport {
+        let mut plot_reports = Vec::new();
+
+        for (i, plot) in backyard.plots.iter().enumerate() {
+            let report = if !plot.is_unlocked {
+                PlotReport::Locked { plot_number: i + 1 }
+            } else if let Some(crop) = &plot.current_crop {
+                PlotReport::Growing {
+                    plot_number: i + 1,
+                    crop_name: crop.crop_type.name.clone(),
+                    stage: crop.current_stage.clone(),
+                    days_in_stage: crop.stage_progress,
+                    health: crop.health,
+                    watered: crop.watered_today,
+                    needs_attention: crop.health < 70 || !crop.watered_today,
+                }
+            } else {
+                PlotReport::Empty {
+                    plot_number: i + 1,
+                    fertility: plot.fertility,
+                    needs_tilling: plot.needs_tilling,
+                }
+            };
+            plot_reports.push(report);
+        }
+
+        // 生成建议
+        let recommendations = Self::generate_recommendations(backyard, context);
+
+        GardenDailyReport {
+            date: Utc::now().date_naive(),
+            plots: plot_reports,
+            harvest_summary: Self::summarize_harvests(harvested_crops),
+            seed_inventory: Self::summarize_seeds(&backyard.seed_inventory),
+            recommendations,
+            panpan_mood: context.emotion.clone(),
+        }
+    }
+
+    /// 生成建议
+    fn generate_recommendations(backyard: &BackyardState, context: &PanpanContext) -> Vec<String> {
+        let mut recommendations = Vec::new();
+
+        // 检查即将成熟的作物
+        for plot in &backyard.plots {
+            if let Some(crop) = &plot.current_crop {
+                if crop.current_stage == GrowthStage::Mature {
+                    recommendations.push(format!(
+                        "【紧急】菜地{}的{}已成熟，建议尽快收获！",
+                        plot.plot_number, crop.crop_type.name
+                    ));
+                }
+            }
+        }
+
+        // 检查季节适宜性
+        for plot in &backyard.plots {
+            if let Some(crop) = &plot.current_crop {
+                if !crop.crop_type.seasons.contains(&context.season) && backyard.greenhouse.is_none() {
+                    recommendations.push(format!(
+                        "【注意】{}在当前季节生长缓慢，考虑建造温室",
+                        crop.crop_type.name
+                    ));
+                }
+            }
+        }
+
+        // 检查种子库存
+        if backyard.seed_inventory.is_empty() {
+            recommendations.push("种子库存不足，建议采购新种子".to_string());
+        }
+
+        // 检查肥力
+        for plot in &backyard.plots {
+            if plot.fertility < 30 && plot.is_unlocked {
+                recommendations.push(format!(
+                    "菜地{}肥力不足，建议施肥或休耕",
+                    plot.plot_number
+                ));
+            }
+        }
+
+        recommendations
+    }
+
+    fn summarize_harvests(harvests: &[HarvestedCrop]) -> HarvestSummary {
+        let mut by_type: HashMap<String, u32> = HashMap::new();
+        let mut total_quality = 0u32;
+
+        for harvest in harvests {
+            *by_type.entry(harvest.name.clone()).or_insert(0) += harvest.quantity;
+            total_quality += harvest.quality;
+        }
+
+        HarvestSummary {
+            total_harvests: harvests.len() as u32,
+            by_crop_type: by_type,
+            average_quality: if !harvests.is_empty() {
+                total_quality as f32 / harvests.len() as f32
+            } else {
+                0.0
+            },
+        }
+    }
+
+    fn summarize_seeds(seeds: &[SeedStack]) -> SeedSummary {
+        let mut by_type: HashMap<String, u32> = HashMap::new();
+        let mut rare_seeds = Vec::new();
+
+        for stack in seeds {
+            *by_type.entry(stack.name.clone()).or_insert(0) += stack.total_quantity;
+            // 检查稀有种子
+            if stack.seeds.iter().any(|s| matches!(s.origin, SeedOrigin::EventReward { .. } | SeedOrigin::Initial)) {
+                rare_seeds.push(stack.name.clone());
+            }
+        }
+
+        SeedSummary {
+            total_varieties: seeds.len() as u32,
+            by_crop_type: by_type,
+            rare_seeds,
+        }
+    }
+}
+
+/// 菜地报告
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum PlotReport {
+    Locked {
+        plot_number: usize,
+    },
+    Empty {
+        plot_number: usize,
+        fertility: u32,
+        needs_tilling: bool,
+    },
+    Growing {
+        plot_number: usize,
+        crop_name: String,
+        stage: GrowthStage,
+        days_in_stage: f32,
+        health: u32,
+        watered: bool,
+        needs_attention: bool,
+    },
+}
+
+/// 每日种植报告
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GardenDailyReport {
+    pub date: NaiveDate,
+    pub plots: Vec<PlotReport>,
+    pub harvest_summary: HarvestSummary,
+    pub seed_inventory: SeedSummary,
+    pub recommendations: Vec<String>,
+    pub panpan_mood: Emotion,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HarvestSummary {
+    pub total_harvests: u32,
+    pub by_crop_type: HashMap<String, u32>,
+    pub average_quality: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SeedSummary {
+    pub total_varieties: u32,
+    pub by_crop_type: HashMap<String, u32>,
+    pub rare_seeds: Vec<String>,
+}
+
+/// 生成盼盼风格的报告文本
+impl GardenDailyReport {
+    pub fn to_panpan_message(&self, panpan_name: &str) -> String {
+        let mut message = format!("【星夜小馆·后院种植报告】\n\n");
+
+        // 菜地状态
+        for plot in &self.plots {
+            match plot {
+                PlotReport::Locked { plot_number } => {
+                    message.push_str(&format!("- 菜地{}：未解锁\n", plot_number));
+                }
+                PlotReport::Empty { plot_number, fertility, needs_tilling } => {
+                    message.push_str(&format!(
+                        "- 菜地{}：空闲（肥力{}%{}）\n",
+                        plot_number,
+                        fertility,
+                        if *needs_tilling { "，需要翻土" } else { "" }
+                    ));
+                }
+                PlotReport::Growing {
+                    plot_number,
+                    crop_name,
+                    stage,
+                    health,
+                    watered,
+                    needs_attention,
+                    ..
+                } => {
+                    let stage_text = match stage {
+                        GrowthStage::Sowing => "播种期",
+                        GrowthStage::Germinating => "发芽期",
+                        GrowthStage::Growing => "生长期",
+                        GrowthStage::Mature => "成熟期【可收获】",
+                        GrowthStage::Withering => "枯萎中",
+                    };
+                    let attention_mark = if *needs_attention { "⚠️" } else { "" };
+                    let water_mark = if *watered { "" } else { "需浇水" };
+                    message.push_str(&format!(
+                        "- 菜地{}（{}）：{}，健康{}% {}{}\n",
+                        plot_number,
+                        crop_name,
+                        stage_text,
+                        health,
+                        water_mark,
+                        attention_mark
+                    ));
+                }
+            }
+        }
+
+        // 收获摘要
+        if self.harvest_summary.total_harvests > 0 {
+            message.push_str("\n【今日收获】\n");
+            for (crop, amount) in &self.harvest_summary.by_crop_type {
+                message.push_str(&format!("- {} × {}\n", crop, amount));
+            }
+        }
+
+        // 种子库存
+        message.push_str("\n【种子库存】\n");
+        for (seed, amount) in &self.seed_inventory.by_crop_type {
+            message.push_str(&format!("- {}种子 × {}\n", seed, amount));
+        }
+
+        // 稀有种子提醒
+        if !self.seed_inventory.rare_seeds.is_empty() {
+            message.push_str("\n【珍贵种子】\n");
+            for seed in &self.seed_inventory.rare_seeds {
+                message.push_str(&format!("- {}（请妥善保管）\n", seed));
+            }
+        }
+
+        // 建议
+        if !self.recommendations.is_empty() {
+            message.push_str("\n【建议】\n");
+            for rec in &self.recommendations {
+                message.push_str(&format!("• {}\n", rec));
+            }
+        }
+
+        // 盼盼的结束语
+        let closing = match self.panpan_mood {
+            Emotion::Happy => "\n今天后院生机勃勃呢！🌸",
+            Emotion::Tired => "\n照料菜地有点累，但看到作物成长很开心...💪",
+            Emotion::Worried => "\n有些作物需要关注，请主人查看...🤔",
+            _ => "\n我会继续照料后院的！🌱",
+        };
+        message.push_str(closing);
+
+        message
+    }
+}
+```
+
+#### 6.6.11.2 收获后处理系统
+
+```rust
+/// 收获后处理系统
+pub struct HarvestProcessor;
+
+impl HarvestProcessor {
+    /// 处理收获物
+    pub fn process_harvest(
+        harvest: HarvestedCrop,
+        inventory: &mut CropInventory,
+        kitchen: &mut KitchenState,
+    ) -> HarvestProcessResult {
+        let mut result = HarvestProcessResult::default();
+
+        // 检查新鲜度，决定处理方式
+        if harvest.freshness < 0.3 {
+            // 新鲜度过低，只能堆肥
+            result.went_to_compost = harvest.quantity;
+            return result;
+        }
+
+        // 优先存入厨房库存（用于烹饪）
+        let kitchen_capacity = kitchen.fresh_ingredient_capacity();
+        let kitchen_used = kitchen.fresh_ingredients.values().sum::<u32>();
+
+        if kitchen_used < kitchen_capacity {
+            let to_kitchen = harvest.quantity.min(kitchen_capacity - kitchen_used);
+            kitchen.add_fresh_ingredient(harvest.crop_type_id, to_kitchen, harvest.quality, harvest.freshness);
+            result.went_to_kitchen = to_kitchen;
+
+            if to_kitchen < harvest.quantity {
+                // 剩余存入仓库
+                let remaining = harvest.quantity - to_kitchen;
+                inventory.add_crop(HarvestedCrop {
+                    quantity: remaining,
+                    ..harvest.clone()
+                });
+                result.went_to_storage = remaining;
+            }
+        } else {
+            // 厨房已满，全部存入仓库
+            inventory.add_crop(harvest.clone());
+            result.went_to_storage = harvest.quantity;
+        }
+
+        result
+    }
+
+    /// 计算作物的最佳用途
+    pub fn suggest_best_use(
+        harvest: &HarvestedCrop,
+        crop_type: &CropType,
+        context: &GameContext,
+    ) -> Vec<UseSuggestion> {
+        let mut suggestions = Vec::new();
+
+        // 烹饪建议
+        if harvest.can_cook() {
+            for recipe_id in &crop_type.related_recipes {
+                if let Some(recipe) = context.recipes.get(recipe_id) {
+                    if recipe.is_unlocked {
+                        suggestions.push(UseSuggestion {
+                            use_type: CropUseType::Cooking(recipe.name.clone()),
+                            priority: 10 + harvest.quality as i32,
+                            description: format!(
+                                "用于【{}】，品质加成 +{}%",
+                                recipe.name,
+                                (harvest.current_quality() as f32 * 10.0) as u32
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+
+        // 赠送建议
+        if harvest.can_gift() {
+            for use in &crop_type.uses {
+                if let CropUse::Gift { favor_bonus, preferred_by } = use {
+                    for neighbor in preferred_by {
+                        suggestions.push(UseSuggestion {
+                            use_type: CropUseType::Gift(neighbor.clone()),
+                            priority: 8 + *favor_bonus as i32 / 5,
+                            description: format!(
+                                "赠送给【{}】，好感度 +{}",
+                                neighbor, favor_bonus
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+
+        // 装饰建议
+        for use in &crop_type.uses {
+            if let CropUse::Decoration { atmosphere_bonus, duration_days } = use {
+                if harvest.freshness > 0.7 {
+                    suggestions.push(UseSuggestion {
+                        use_type: CropUseType::Decoration,
+                        priority: 6,
+                        description: format!(
+                            "装饰餐厅，氛围 +{}，持续{}天",
+                            atmosphere_bonus, duration_days
+                        ),
+                    });
+                }
+            }
+        }
+
+        // 售卖建议
+        for use in &crop_type.uses {
+            if let CropUse::Sale { price } = use {
+                let final_price = *price * Decimal::from(harvest.quantity) * Decimal::from(harvest.quality);
+                suggestions.push(UseSuggestion {
+                    use_type: CropUseType::Sale,
+                    priority: 3,
+                    description: format!("在邻里市场出售，获得 ¥{}", final_price),
+                });
+            }
+        }
+
+        // 工坊制作建议
+        for use in &crop_type.uses {
+            if let CropUse::Crafting { item_unlocks } = use {
+                for item in item_unlocks {
+                    suggestions.push(UseSuggestion {
+                        use_type: CropUseType::Crafting(item.clone()),
+                        priority: 5,
+                        description: format!("在工坊制作【{}】", item),
+                    });
+                }
+            }
+        }
+
+        // 按优先级排序
+        suggestions.sort_by(|a, b| b.priority.cmp(&a.priority));
+        suggestions
+    }
+}
+
+#[derive(Default)]
+pub struct HarvestProcessResult {
+    pub went_to_kitchen: u32,
+    pub went_to_storage: u32,
+    pub went_to_compost: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct UseSuggestion {
+    pub use_type: CropUseType,
+    pub priority: i32,
+    pub description: String,
+}
+
+#[derive(Clone, Debug)]
+pub enum CropUseType {
+    Cooking(String),      // 菜谱名称
+    Gift(String),         // 邻居名称
+    Decoration,
+    Sale,
+    Crafting(String),     // 物品名称
+}
+
+/// 作物库存（仓库存储）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CropInventory {
+    pub items: Vec<InventoryCrop>,
+    pub capacity: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InventoryCrop {
+    pub crop: HarvestedCrop,
+    pub stored_at: DateTime<Utc>,
+}
+
+impl CropInventory {
+    /// 更新鲜度（每小时调用）
+    pub fn update_freshness(&mut self, hours: u32) {
+        for item in &mut self.items {
+            item.crop.freshness = GardenCalculator::calculate_freshness_decay(
+                item.crop.freshness,
+                hours,
+                false, // 仓库不在冰箱内
+                0,
+            );
+        }
+
+        // 移除完全腐烂的作物
+        self.items.retain(|item| item.crop.freshness > 0.0);
+    }
+
+    /// 获取按类型分组的库存
+    pub fn grouped_by_type(&self) -> HashMap<Uuid, Vec<&InventoryCrop>> {
+        let mut grouped = HashMap::new();
+        for item in &self.items {
+            grouped
+                .entry(item.crop.crop_type_id)
+                .or_insert_with(Vec::new)
+                .push(item);
+        }
+        grouped
+    }
+
+    /// 获取指定作物的最佳品质库存
+    pub fn get_best_quality(&self, crop_type_id: Uuid) -> Option<&InventoryCrop> {
+        self.items
+            .iter()
+            .filter(|item| item.crop.crop_type_id == crop_type_id)
+            .max_by(|a, b| {
+                let a_score = a.crop.quality as f32 * a.crop.freshness;
+                let b_score = b.crop.quality as f32 * b.crop.freshness;
+                a_score.partial_cmp(&b_score).unwrap_or(std::cmp::Ordering::Equal)
+            })
+    }
+}
+```
+
+#### 6.6.11.3 与其他系统的联动
+
+```rust
+/// 种植系统与其他系统的联动管理
+pub struct GardenIntegration;
+
+impl GardenIntegration {
+    /// 与厨房系统的联动
+    pub fn kitchen_integration(
+        fresh_ingredient: &HarvestedCrop,
+        recipe: &Recipe,
+    ) -> KitchenGardenBonus {
+        // 新鲜度加成
+        let freshness_bonus = if fresh_ingredient.freshness > 0.8 {
+            0.15  // 极新鲜
+        } else if fresh_ingredient.freshness > 0.6 {
+            0.10  // 新鲜
+        } else if fresh_ingredient.freshness > 0.4 {
+            0.05  // 一般
+        } else {
+            0.0   // 不新鲜
+        };
+
+        // 自产加成（使用自己种植的食材）
+        let homegrown_bonus = 0.05;
+
+        // 品质加成
+        let quality_bonus = (fresh_ingredient.quality - 3) as f32 * 0.03;
+
+        KitchenGardenBonus {
+            quality_bonus: freshness_bonus + homegrown_bonus + quality_bonus,
+            special_description: if fresh_ingredient.quality >= 4 {
+                Some(format!("使用了精心培育的{}", fresh_ingredient.name))
+            } else {
+                None
+            },
+        }
+    }
+
+    /// 与邻里系统的联动
+    pub fn neighbor_integration(
+        gift: &HarvestedCrop,
+        neighbor: &Neighbor,
+    ) -> NeighborGiftResult {
+        // 检查邻居偏好
+        let preference_bonus = neighbor.crop_preferences
+            .iter()
+            .find(|p| p.crop_type_id == gift.crop_type_id)
+            .map(|p| p.favor_multiplier)
+            .unwrap_or(1.0);
+
+        // 计算好感度增加
+        let base_favor = match gift.quality {
+            5 => 20,
+            4 => 15,
+            3 => 10,
+            2 => 5,
+            _ => 2,
+        };
+
+        let final_favor = (base_favor as f32 * preference_bonus) as u32;
+
+        // 检查是否触发特殊对话
+        let special_dialogue = if gift.crop_type_id == neighbor.favorite_crop {
+            Some(neighbor.favorite_crop_dialogue.clone())
+        } else {
+            None
+        };
+
+        NeighborGiftResult {
+            favor_gained: final_favor,
+            preference_bonus: preference_bonus > 1.0,
+            special_dialogue,
+            return_gift: if final_favor >= 15 {
+                neighbor.generate_return_gift()
+            } else {
+                None
+            },
+        }
+    }
+
+    /// 与旅行系统的联动
+    pub fn travel_integration(
+        travel_destination: &TravelDestination,
+    ) -> TravelSeedReward {
+        // 根据目的地生成可能获得的种子
+        let possible_seeds = match travel_destination.region {
+            Region::Sichuan => vec![
+                ("四川二荆条辣椒", CropRarity::Uncommon),
+                ("汉源花椒", CropRarity::Rare),
+            ],
+            Region::Yunnan => vec![
+                ("云南野生菌种", CropRarity::Rare),
+                ("普洱茶树苗", CropRarity::Legendary),
+            ],
+            Region::Jiangnan => vec![
+                ("江南水仙", CropRarity::Uncommon),
+                ("苏州桂花", CropRarity::Rare),
+            ],
+            _ => vec![],
+        };
+
+        TravelSeedReward {
+            possible_seeds,
+            guaranteed_seeds: travel_destination.guaranteed_seed_rewards.clone(),
+        }
+    }
+
+    /// 与记忆碎片系统的联动
+    pub fn memory_integration(
+        crop_type: &CropType,
+        harvest: &HarvestedCrop,
+    ) -> Option<MemoryTrigger> {
+        // 特殊作物触发记忆
+        for event in &crop_type.related_events {
+            if event.starts_with("memory_") {
+                return Some(MemoryTrigger {
+                    memory_id: event[7..].to_string(), // 去掉 "memory_" 前缀
+                    trigger_type: MemoryTriggerType::CropHarvest {
+                        crop_name: crop_type.name.clone(),
+                        quality: harvest.quality,
+                    },
+                    emotional_weight: if harvest.quality >= 4 { 1.2 } else { 1.0 },
+                });
+            }
+        }
+
+        // 祖父遗产作物特殊触发
+        if crop_type.rarity == CropRarity::Legendary {
+            return Some(MemoryTrigger {
+                memory_id: format!("grandpa_{}", crop_type.id),
+                trigger_type: MemoryTriggerType::SpecialCrop {
+                    crop_name: crop_type.name.clone(),
+                },
+                emotional_weight: 1.5,
+            });
+        }
+
+        None
+    }
+
+    /// 与工坊系统的联动
+    pub fn workshop_integration(
+        crop: &HarvestedCrop,
+        crop_type: &CropType,
+    ) -> Vec<WorkshopRecipe> {
+        let mut recipes = Vec::new();
+
+        for use in &crop_type.uses {
+            if let CropUse::Crafting { item_unlocks } = use {
+                for item_name in item_unlocks {
+                    // 检查是否满足品质要求
+                    let quality_ok = match item_name.as_str() {
+                        "干花书签" => crop.quality >= 3,
+                        "薄荷香皂" => crop.quality >= 2,
+                        "茉莉花茶" => crop.quality >= 4,
+                        _ => true,
+                    };
+
+                    if quality_ok {
+                        recipes.push(WorkshopRecipe {
+                            name: item_name.clone(),
+                            required_crop: crop_type.name.clone(),
+                            required_quality: crop.quality,
+                            craft_time_hours: match item_name.as_str() {
+                                "干花书签" => 24,
+                                "薄荷香皂" => 48,
+                                "茉莉花茶" => 12,
+                                _ => 24,
+                            },
+                        });
+                    }
+                }
+            }
+        }
+
+        recipes
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct KitchenGardenBonus {
+    pub quality_bonus: f32,
+    pub special_description: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NeighborGiftResult {
+    pub favor_gained: u32,
+    pub preference_bonus: bool,
+    pub special_dialogue: Option<String>,
+    pub return_gift: Option<GiftItem>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TravelSeedReward {
+    pub possible_seeds: Vec<(&'static str, CropRarity)>,
+    pub guaranteed_seeds: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MemoryTrigger {
+    pub memory_id: String,
+    pub trigger_type: MemoryTriggerType,
+    pub emotional_weight: f32,
+}
+
+#[derive(Clone, Debug)]
+pub enum MemoryTriggerType {
+    CropHarvest { crop_name: String, quality: u32 },
+    SpecialCrop { crop_name: String },
+}
+
+#[derive(Clone, Debug)]
+pub struct WorkshopRecipe {
+    pub name: String,
+    pub required_crop: String,
+    pub required_quality: u32,
+    pub craft_time_hours: u32,
+}
+```
+
+#### 6.6.12 种植相关 API
+
+```
+# 后院种植系统 API
+
+## 获取后院状态
+GET /api/v1/saves/:id/backyard
+Response: BackyardState
+
+## 更新后院等级
+PATCH /api/v1/saves/:id/backyard/level
+Body: { "new_level": 3 }
+Response: BackyardState
+
+## 菜地操作
+
+# 获取菜地列表
+GET /api/v1/saves/:id/backyard/plots
+Response: Vec<VegetablePlot>
+
+# 翻土
+POST /api/v1/saves/:id/backyard/plots/:plot_id/till
+Response: { "success": true, "energy_cost": 10 }
+
+# 播种
+POST /api/v1/saves/:id/backyard/plots/:plot_id/plant
+Body: { "crop_type_id": "uuid", "seed_source": "inventory" }
+Response: { "success": true, "energy_cost": 5, "estimated_harvest": "2024-..." }
+
+# 浇水
+POST /api/v1/saves/:id/backyard/plots/water
+Body: { "plot_ids": ["uuid1", "uuid2"] }
+Response: { "success": true, "energy_cost": 6, "watered_count": 2 }
+
+# 施肥
+POST /api/v1/saves/:id/backyard/plots/:plot_id/fertilize
+Body: { "fertilizer_type": "organic" }
+Response: { "success": true, "energy_cost": 3, "fertility_bonus": 20 }
+
+# 收获
+POST /api/v1/saves/:id/backyard/plots/:plot_id/harvest
+Response: {
+    "success": true,
+    "crop_name": "小白菜",
+    "quantity": 8,
+    "quality": 4,
+    "energy_cost": 5
+}
+
+# 清除枯萎作物
+DELETE /api/v1/saves/:id/backyard/plots/:plot_id/crop
+Response: { "success": true, "energy_cost": 3 }
+
+## 病虫害管理
+
+# 检查作物健康
+GET /api/v1/saves/:id/backyard/plots/:plot_id/health
+Response: CropHealthStatus
+
+# 治疗作物
+POST /api/v1/saves/:id/backyard/plots/:plot_id/treat
+Body: { "treatment": "neem_oil" }
+Response: TreatmentResult
+
+## 种子管理
+
+# 获取种子库存
+GET /api/v1/saves/:id/backyard/seeds
+Response: Vec<SeedStack>
+
+# 购买种子
+POST /api/v1/saves/:id/backyard/seeds/purchase
+Body: { "crop_type_id": "uuid", "quantity": 5 }
+Response: { "success": true, "total_cost": "15.00" }
+
+# 自留种（需要园艺技能5级）
+POST /api/v1/saves/:id/backyard/seeds/save
+Body: { "from_harvest_id": "uuid" }
+Response: { "success": true, "seeds_obtained": 3 }
+
+## 堆肥系统
+
+# 获取堆肥状态
+GET /api/v1/saves/:id/backyard/compost
+Response: CompostArea
+
+# 添加堆肥材料
+POST /api/v1/saves/:id/backyard/compost/add
+Body: { "material_type": "vegetable_scraps", "quantity": 3 }
+Response: { "success": true, "current_fill": 45 }
+
+# 收集完成的堆肥
+POST /api/v1/saves/:id/backyard/compost/collect
+Response: { "success": true, "fertilizer_obtained": 5 }
+
+## 温室系统
+
+# 获取温室状态
+GET /api/v1/saves/:id/backyard/greenhouse
+Response: Option<Greenhouse>
+
+# 建造温室
+POST /api/v1/saves/:id/backyard/greenhouse/build
+Response: { "success": true, "cost": "500.00" }
+
+## 自动化设置
+
+# 获取自动化配置
+GET /api/v1/saves/:id/backyard/automation
+Response: GardenAutomation
+
+# 更新自动化配置
+PATCH /api/v1/saves/:id/backyard/automation
+Body: { "auto_watering": true }
+Response: GardenAutomation
+
+# 设置种植计划
+POST /api/v1/saves/:id/backyard/schedule
+Body: GardenSchedule
+Response: { "success": true }
+
+## 种植任务
+
+# 获取待处理任务
+GET /api/v1/saves/:id/backyard/tasks
+Response: Vec<GardenTask>
+
+# 执行任务
+POST /api/v1/saves/:id/backyard/tasks/execute
+Body: { "task_id": "uuid" }
+Response: { "success": true, "energy_cost": 5 }
+
+## 统计数据
+
+# 获取种植统计
+GET /api/v1/saves/:id/backyard/statistics
+Response: {
+    "total_harvests": 45,
+    "total_crops_grown": 280,
+    "most_grown_crop": "小白菜",
+    "average_yield": 7.2,
+    "successful_harvest_rate": 0.85
+}
+
+# 获取种植历史
+GET /api/v1/saves/:id/backyard/history
+Query: ?limit=30&offset=0
+Response: Vec<PlantingHistoryEntry>
 ```
 
 ### 6.7 工坊系统
@@ -7208,6 +10164,442 @@ enum MemoryType {
 }
 ```
 
+#### 8.2.1 记忆碎片内容存储设计
+
+记忆碎片是游戏叙事的核心，每个碎片包含丰富的内容，用于揭示祖父的过去和星夜小馆的历史。
+
+```rust
+/// 记忆碎片完整定义
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MemoryFragmentDefinition {
+    pub id: Uuid,
+    pub fragment_number: u32,         // 碎片编号（1-50）
+    pub title: String,                // 碎片标题
+    pub fragment_type: MemoryTypeDetail,
+
+    // 内容
+    pub content: MemoryContent,
+
+    // 解锁条件
+    pub unlock_conditions: Vec<UnlockCondition>,
+
+    // 关联信息
+    pub related_entities: RelatedEntities,
+
+    // 元数据
+    pub emotional_tone: EmotionalTone,
+    pub importance: MemoryImportance,
+    pub estimated_unlock_chapter: u32,
+}
+
+/// 记忆碎片内容
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MemoryContent {
+    /// 主叙事文本（盼盼的回忆）
+    pub narrative: String,
+
+    /// 附加描述（场景描述）
+    pub scene_description: Option<String>,
+
+    /// 祖父的原话（如果有）
+    pub grandfather_quote: Option<String>,
+
+    /// 相关的感官记忆
+    pub sensory_memories: Vec<SensoryMemory>,
+
+    /// 碎片解锁时的盼盼备注
+    pub panpan_reaction: String,
+
+    /// 解锁后解锁的额外信息
+    pub unlocked_knowledge: Option<String>,
+}
+
+/// 感官记忆（增强沉浸感）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SensoryMemory {
+    pub sense_type: SenseType,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum SenseType {
+    Visual,    // 视觉：颜色、光影
+    Auditory,  // 听觉：声音、音乐
+    Olfactory, // 嗅觉：气味
+    Gustatory, // 味觉：味道
+    Tactile,   // 触觉：温度、质感
+}
+
+/// 记忆碎片类型（详细）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MemoryTypeDetail {
+    /// 关于祖父的记忆
+    Grandfather { period: GrandfatherPeriod },
+
+    /// 关于小馆的记忆
+    ShopHistory { year_range: (u32, u32) },
+
+    /// 关于老街的记忆
+    OldStreet { location: String },
+
+    /// 关于菜谱的记忆
+    RecipeStory { recipe_id: Uuid },
+
+    /// 关于顾客的记忆
+    CustomerStory { customer_type: String },
+
+    /// 盼盼自身的记忆
+    PanpanSelf { created_year: u32 },
+
+    /// 旅行收获的记忆
+    TravelMemory { destination: String },
+
+    /// 家庭秘密
+    FamilySecret { secret_level: u32 },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum GrandfatherPeriod {
+    Youth,         // 青年时期（1960s-1970s）
+    MiddleAge,     // 中年时期（1980s-1990s）
+    LateYears,     // 晚年时期（2000s-2020s）
+    BeforePassing, // 临终前
+}
+
+/// 解锁条件
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum UnlockCondition {
+    /// 里程碑达成
+    MilestoneCompleted { milestone_id: String },
+
+    /// 特定事件触发
+    EventTriggered { event_id: String },
+
+    /// 菜谱研发成功
+    RecipeMastered { recipe_id: Uuid },
+
+    /// 顾客好感度达标
+    CustomerBondReached { customer_type: String, level: u32 },
+
+    /// 旅行到特定地点
+    TravelCompleted { destination: String },
+
+    /// 种植收获特定作物
+    CropHarvested { crop_id: Uuid, quality: u32 },
+
+    /// 信任度达标
+    TrustLevelReached { level: u32 },
+
+    /// 游玩时长
+    PlayTimeReached { hours: u32 },
+
+    /// 特定日期（纪念日等）
+    SpecificDate { month: u32, day: u32 },
+
+    /// 前置碎片解锁
+    PreviousFragmentUnlocked { fragment_ids: Vec<Uuid> },
+
+    /// 组合条件
+    All(Vec<UnlockCondition>),
+    Any(Vec<UnlockCondition>),
+}
+
+/// 关联实体
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RelatedEntities {
+    pub recipes: Vec<Uuid>,
+    pub customers: Vec<String>,
+    pub locations: Vec<String>,
+    pub items: Vec<String>,
+    pub other_fragments: Vec<Uuid>,
+}
+
+/// 情感基调
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum EmotionalTone {
+    Warm,        // 温馨：家庭团聚、日常幸福
+    Nostalgic,   // 怀旧：追忆往昔、岁月流逝
+    Bittersweet, // 苦乐参半：离别、成长
+    Melancholy,  // 伤感：失去、遗憾
+    Joyful,      // 欢快：庆祝、成功
+    Mysterious,  // 神秘：秘密、发现
+    Hopeful,     // 充满希望：新的开始
+    Peaceful,    // 平和：宁静、满足
+}
+
+/// 记忆重要性
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum MemoryImportance {
+    Trivial,    // 琐碎：背景补充
+    Normal,     // 普通：日常记忆
+    Important,  // 重要：关键情节
+    Critical,   // 关键：核心叙事
+    Hidden,     // 隐藏：特殊解锁
+}
+
+/// 记忆碎片解锁状态（运行时）
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MemoryUnlockState {
+    pub fragment_id: Uuid,
+    pub unlocked: bool,
+    pub unlocked_at: Option<DateTime<Utc>>,
+    pub unlock_method: Option<String>,
+    pub viewed: bool,
+    pub view_count: u32,
+}
+```
+
+#### 记忆碎片内容数据示例
+
+```rust
+impl MemoryFragmentDefinition {
+    /// 初始碎片定义
+    pub fn initial_fragments() -> Vec<Self> {
+        vec![
+            // 碎片01：初始解锁 - 晨光中的身影
+            Self {
+                id: Uuid::nil(),
+                fragment_number: 1,
+                title: "晨光中的身影".into(),
+                fragment_type: MemoryTypeDetail::Grandfather {
+                    period: GrandfatherPeriod::LateYears,
+                },
+                content: MemoryContent {
+                    narrative: "祖父……每天清晨会坐在靠窗的位置……喝一杯茶……看着老街慢慢醒来。他总说，这是他最喜欢的时间。".into(),
+                    scene_description: Some("晨光透过老旧的玻璃窗洒进来，尘埃在光线中缓缓漂浮。祖父的身影在逆光中显得有些模糊。".into()),
+                    grandfather_quote: Some("小远，你看这条街，每家店都有自己的故事。我们的店，就是为了让人们记住家的味道。".into()),
+                    sensory_memories: vec![
+                        SensoryMemory {
+                            sense_type: SenseType::Olfactory,
+                            description: "淡淡的茉莉花香，那是祖父每天必泡的茶".into(),
+                        },
+                        SensoryMemory {
+                            sense_type: SenseType::Auditory,
+                            description: "老街渐渐苏醒的声音——卷帘门拉起、自行车铃声".into(),
+                        },
+                    ],
+                    panpan_reaction: "这段记忆……虽然模糊，但感觉很温暖。祖父很喜欢这家店。".into(),
+                    unlocked_knowledge: None,
+                },
+                unlock_conditions: vec![UnlockCondition::MilestoneCompleted {
+                    milestone_id: "first_connection".into(),
+                }],
+                related_entities: RelatedEntities {
+                    recipes: vec![],
+                    customers: vec![],
+                    locations: vec!["星夜小馆".into()],
+                    items: vec![],
+                    other_fragments: vec![],
+                },
+                emotional_tone: EmotionalTone::Nostalgic,
+                importance: MemoryImportance::Important,
+                estimated_unlock_chapter: 1,
+            },
+
+            // 碎片05：第一位老顾客
+            Self {
+                id: Uuid::nil(),
+                fragment_number: 5,
+                title: "街坊邻居".into(),
+                fragment_type: MemoryTypeDetail::CustomerStory {
+                    customer_type: "elderly_neighbor".into(),
+                },
+                content: MemoryContent {
+                    narrative: "第一位顾客是李大爷……他以前每天来吃早饭……祖父总会给他多盛一碗粥。".into(),
+                    scene_description: Some("李大爷拄着拐杖，慢慢走进店里。他的眼睛亮了起来，像是看到了久违的老朋友。".into()),
+                    grandfather_quote: Some("老李啊，这是你爱吃的皮蛋瘦肉粥，我多放了点姜丝。".into()),
+                    sensory_memories: vec![
+                        SensoryMemory {
+                            sense_type: SenseType::Gustatory,
+                            description: "热腾腾的粥，带着姜丝的微微辛辣".into(),
+                        },
+                    ],
+                    panpan_reaction: "李大爷……我记得他。他总是笑眯眯的，还会给我讲他年轻时的故事。".into(),
+                    unlocked_knowledge: Some("解锁：李大爷的背景故事".into()),
+                },
+                unlock_conditions: vec![UnlockCondition::CustomerBondReached {
+                    customer_type: "李大爷".into(),
+                    level: 2,
+                }],
+                related_entities: RelatedEntities {
+                    recipes: vec![],
+                    customers: vec!["李大爷".into()],
+                    locations: vec![],
+                    items: vec![],
+                    other_fragments: vec![],
+                },
+                emotional_tone: EmotionalTone::Warm,
+                importance: MemoryImportance::Normal,
+                estimated_unlock_chapter: 1,
+            },
+
+            // 碎片08：旅行的记忆
+            Self {
+                id: Uuid::nil(),
+                fragment_number: 8,
+                title: "成都的味道".into(),
+                fragment_type: MemoryTypeDetail::TravelMemory {
+                    destination: "成都".into(),
+                },
+                content: MemoryContent {
+                    narrative: "祖父年轻时也喜欢旅行，他曾去成都学做麻婆豆腐……这是他最自豪的菜。".into(),
+                    scene_description: Some("成都的街头，空气中弥漫着麻辣的香气。祖父站在一家老店门前，认真地看着老师傅翻炒。".into()),
+                    grandfather_quote: Some("川菜的精髓在于'麻'和'辣'的平衡。花椒要够香，辣椒要够红，但最重要的是——要让客人感受到厨师的用心。".into()),
+                    sensory_memories: vec![
+                        SensoryMemory {
+                            sense_type: SenseType::Olfactory,
+                            description: "花椒的麻香、豆瓣酱的醇厚".into(),
+                        },
+                        SensoryMemory {
+                            sense_type: SenseType::Tactile,
+                            description: "铁锅传来的热浪，汗水顺着脸颊滑落".into(),
+                        },
+                    ],
+                    panpan_reaction: "原来祖父的麻婆豆腐是在成都学的！难怪那么正宗。我……想去成都看看。".into(),
+                    unlocked_knowledge: Some("解锁：成都旅行目的地".into()),
+                },
+                unlock_conditions: vec![UnlockCondition::TravelCompleted {
+                    destination: "成都".into(),
+                }],
+                related_entities: RelatedEntities {
+                    recipes: vec![],
+                    customers: vec![],
+                    locations: vec!["成都".into()],
+                    items: vec![],
+                    other_fragments: vec![],
+                },
+                emotional_tone: EmotionalTone::Joyful,
+                importance: MemoryImportance::Important,
+                estimated_unlock_chapter: 2,
+            },
+
+            // 碎片25：家庭秘密（关键碎片）
+            Self {
+                id: Uuid::nil(),
+                fragment_number: 25,
+                title: "未寄出的信".into(),
+                fragment_type: MemoryTypeDetail::FamilySecret {
+                    secret_level: 2,
+                },
+                content: MemoryContent {
+                    narrative: "在修理盼盼时，我在他体内发现了一封从未寄出的信。那是祖父写给远在火星的我的信……".into(),
+                    scene_description: Some("一封泛黄的信封，字迹已经有些模糊。信封上写着'火星殖民地·奥林帕斯基地·林远收'。".into()),
+                    grandfather_quote: Some("小远，爷爷知道你在火星很忙，回不来。没关系，爷爷会把小馆一直开着，等你回来的那天。这封信可能永远寄不出去，但爷爷想让你知道——星夜小馆，永远是你的家。".into()),
+                    sensory_memories: vec![
+                        SensoryMemory {
+                            sense_type: SenseType::Tactile,
+                            description: "纸张已经变得脆弱，小心翼翼地展开".into(),
+                        },
+                    ],
+                    panpan_reaction: "这封信……祖父一直藏在我体内。我……我不知道该说什么。主人，对不起，我应该早点告诉你的。".into(),
+                    unlocked_knowledge: Some("解锁：祖父的真实心意、家庭背景完整信息".into()),
+                },
+                unlock_conditions: vec![UnlockCondition::All(vec![
+                    UnlockCondition::TrustLevelReached { level: 80 },
+                    UnlockCondition::MilestoneCompleted { milestone_id: "shop_fully_restored".into() },
+                    UnlockCondition::PreviousFragmentUnlocked { fragment_ids: vec![] },
+                ])],
+                related_entities: RelatedEntities {
+                    recipes: vec![],
+                    customers: vec![],
+                    locations: vec![],
+                    items: vec!["祖父的信".into()],
+                    other_fragments: vec![],
+                },
+                emotional_tone: EmotionalTone::Bittersweet,
+                importance: MemoryImportance::Critical,
+                estimated_unlock_chapter: 4,
+            },
+        ]
+    }
+}
+```
+
+#### 记忆碎片数据库表
+
+```sql
+-- 记忆碎片定义表（全局配置）
+CREATE TABLE memory_fragment_definitions (
+    id TEXT PRIMARY KEY,
+    fragment_number INTEGER NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    fragment_type TEXT NOT NULL,        -- JSON
+    content TEXT NOT NULL,              -- JSON (MemoryContent)
+    unlock_conditions TEXT NOT NULL,    -- JSON
+    related_entities TEXT NOT NULL,     -- JSON
+    emotional_tone TEXT NOT NULL,
+    importance TEXT NOT NULL,
+    estimated_unlock_chapter INTEGER NOT NULL
+);
+
+-- 玩家记忆碎片状态表（存档相关）
+CREATE TABLE memory_fragment_states (
+    id TEXT PRIMARY KEY,
+    save_id TEXT NOT NULL,
+    fragment_id TEXT NOT NULL,
+    unlocked INTEGER NOT NULL DEFAULT 0,
+    unlocked_at TEXT,
+    unlock_method TEXT,
+    viewed INTEGER NOT NULL DEFAULT 0,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(save_id, fragment_id),
+    FOREIGN KEY (save_id) REFERENCES saves(id),
+    FOREIGN KEY (fragment_id) REFERENCES memory_fragment_definitions(id)
+);
+
+CREATE INDEX idx_memory_states_save ON memory_fragment_states(save_id);
+CREATE INDEX idx_memory_states_unlocked ON memory_fragment_states(save_id, unlocked);
+```
+
+#### 记忆碎片 API
+
+```
+# 获取所有记忆碎片状态
+GET /api/v1/saves/:id/memories
+Response: {
+    "total": 50,
+    "unlocked": 12,
+    "fragments": [
+        {
+            "id": "uuid",
+            "fragment_number": 1,
+            "title": "晨光中的身影",
+            "unlocked": true,
+            "viewed": true,
+            "importance": "Important",
+            "emotional_tone": "Nostalgic"
+        }
+    ]
+}
+
+# 获取单个记忆碎片详情
+GET /api/v1/saves/:id/memories/:fragment_id
+Response: MemoryFragmentDefinition
+
+# 标记记忆碎片为已读
+POST /api/v1/saves/:id/memories/:fragment_id/view
+Response: { "success": true }
+
+# 获取记忆碎片解锁进度
+GET /api/v1/saves/:id/memories/progress
+Response: {
+    "by_chapter": {
+        "1": { "unlocked": 8, "total": 15 },
+        "2": { "unlocked": 4, "total": 12 },
+        "3": { "unlocked": 0, "total": 10 },
+        "4": { "unlocked": 0, "total": 8 },
+        "5": { "unlocked": 0, "total": 5 }
+    },
+    "by_type": {
+        "Grandfather": { "unlocked": 3, "total": 10 },
+        "ShopHistory": { "unlocked": 4, "total": 8 },
+        "RecipeStory": { "unlocked": 2, "total": 12 },
+        "FamilySecret": { "unlocked": 0, "total": 5 }
+    },
+    "next_unlock_hint": "继续提升李大爷的好感度以解锁新记忆"
+}
+```
+
 ### 8.3 仓储层设计
 
 ```rust
@@ -7769,6 +11161,356 @@ CREATE INDEX idx_unlocked_save ON unlocked_achievements(save_id);
 
 ## 十、API 设计
 
+### 10.0 健康检查 API
+
+健康检查 API 用于 systemd 监控和运维管理，无需认证。
+
+```
+# ==================== 健康检查 ====================
+
+# 基础健康检查（systemd 使用）
+GET /health
+Response: {
+    "status": "healthy" | "degraded" | "unhealthy",
+    "uptime_seconds": 3600,
+    "version": "1.0.0"
+}
+
+# 详细健康检查（运维使用）
+GET /health/detail
+Response: {
+    "status": "healthy",
+    "uptime_seconds": 3600,
+    "version": "1.0.0",
+    "components": {
+        "database": {
+            "status": "healthy",
+            "latency_ms": 5,
+            "connections": 2
+        },
+        "llm": {
+            "status": "healthy",
+            "provider": "ollama",
+            "model": "qwen2.5:7b",
+            "last_success": "2024-01-15T10:30:00Z"
+        },
+        "memory": {
+            "status": "healthy",
+            "used_mb": 150,
+            "available_mb": 500
+        }
+    },
+    "active_saves": 3,
+    "active_connections": 1
+}
+
+# 就绪检查（Kubernetes/负载均衡使用）
+GET /ready
+Response: {
+    "ready": true,
+    "checks": {
+        "database": true,
+        "llm": true,
+        "config": true
+    }
+}
+
+# 存活检查
+GET /live
+Response: {
+    "alive": true
+}
+```
+
+#### 健康状态定义
+
+| 状态 | 说明 | systemd 处理 |
+|------|------|-------------|
+| `healthy` | 所有组件正常 | 继续运行 |
+| `degraded` | 部分非关键组件异常（如 LLM 不可用但有降级） | 继续运行，记录警告 |
+| `unhealthy` | 关键组件异常（数据库损坏等） | 重启服务 |
+
+#### 健康检查实现
+
+```rust
+use axum::{extract::State, Json};
+use serde::{Deserialize, Serialize};
+use std::time::Instant;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HealthStatus {
+    pub status: ComponentStatus,
+    pub uptime_seconds: u64,
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub components: Option<ComponentsHealth>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_saves: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub active_connections: Option<u32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ComponentStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ComponentsHealth {
+    pub database: DatabaseHealth,
+    pub llm: LlmHealth,
+    pub memory: MemoryHealth,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DatabaseHealth {
+    pub status: ComponentStatus,
+    pub latency_ms: u64,
+    pub connections: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LlmHealth {
+    pub status: ComponentStatus,
+    pub provider: String,
+    pub model: String,
+    pub last_success: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MemoryHealth {
+    pub status: ComponentStatus,
+    pub used_mb: u64,
+    pub available_mb: u64,
+}
+
+/// 健康检查服务
+pub struct HealthChecker {
+    start_time: Instant,
+    db_pool: SqlitePool,
+    llm_manager: Arc<LlmManager>,
+    config: Arc<Config>,
+}
+
+impl HealthChecker {
+    /// 基础健康检查
+    pub async fn check_basic(&self) -> HealthStatus {
+        let db_health = self.check_database().await;
+
+        let status = if db_health.status == ComponentStatus::Unhealthy {
+            ComponentStatus::Unhealthy
+        } else if db_health.status == ComponentStatus::Degraded {
+            ComponentStatus::Degraded
+        } else {
+            ComponentStatus::Healthy
+        };
+
+        HealthStatus {
+            status,
+            uptime_seconds: self.start_time.elapsed().as_secs(),
+            version: self.config.version.clone(),
+            components: None,
+            active_saves: None,
+            active_connections: None,
+        }
+    }
+
+    /// 详细健康检查
+    pub async fn check_detail(&self) -> HealthStatus {
+        let database = self.check_database().await;
+        let llm = self.check_llm().await;
+        let memory = self.check_memory().await;
+
+        // 综合判断状态
+        let status = if database.status == ComponentStatus::Unhealthy {
+            ComponentStatus::Unhealthy
+        } else if llm.status == ComponentStatus::Unhealthy {
+            // LLM 不可用但有降级策略，标记为 degraded
+            ComponentStatus::Degraded
+        } else if database.status == ComponentStatus::Degraded
+            || llm.status == ComponentStatus::Degraded
+            || memory.status == ComponentStatus::Degraded
+        {
+            ComponentStatus::Degraded
+        } else {
+            ComponentStatus::Healthy
+        };
+
+        HealthStatus {
+            status,
+            uptime_seconds: self.start_time.elapsed().as_secs(),
+            version: self.config.version.clone(),
+            components: Some(ComponentsHealth { database, llm, memory }),
+            active_saves: Some(self.count_active_saves().await),
+            active_connections: Some(self.count_active_connections().await),
+        }
+    }
+
+    /// 检查数据库健康
+    async fn check_database(&self) -> DatabaseHealth {
+        let start = std::time::Instant::now();
+
+        // 执行简单查询测试连接
+        match sqlx::query("SELECT 1").fetch_one(&self.db_pool).await {
+            Ok(_) => {
+                let latency = start.elapsed().as_millis() as u64;
+                let status = if latency < 100 {
+                    ComponentStatus::Healthy
+                } else if latency < 500 {
+                    ComponentStatus::Degraded
+                } else {
+                    ComponentStatus::Unhealthy
+                };
+
+                DatabaseHealth {
+                    status,
+                    latency_ms: latency,
+                    connections: self.db_pool.size() as u32,
+                }
+            }
+            Err(e) => {
+                tracing::error!("Database health check failed: {}", e);
+                DatabaseHealth {
+                    status: ComponentStatus::Unhealthy,
+                    latency_ms: 0,
+                    connections: 0,
+                }
+            }
+        }
+    }
+
+    /// 检查 LLM 服务健康
+    async fn check_llm(&self) -> LlmHealth {
+        match self.llm_manager.health_check().await {
+            Ok(info) => LlmHealth {
+                status: ComponentStatus::Healthy,
+                provider: info.provider,
+                model: info.model,
+                last_success: Some(info.last_success),
+            },
+            Err(e) => {
+                tracing::warn!("LLM health check failed: {}", e);
+                LlmHealth {
+                    status: ComponentStatus::Degraded, // 降级但可用
+                    provider: self.llm_manager.provider_name().to_string(),
+                    model: self.llm_manager.model_name().to_string(),
+                    last_success: self.llm_manager.last_success_time(),
+                }
+            }
+        }
+    }
+
+    /// 检查内存使用
+    fn check_memory(&self) -> MemoryHealth {
+        let used = self.get_memory_usage();
+        let available = self.get_available_memory();
+
+        let status = if used < available * 80 / 100 {
+            ComponentStatus::Healthy
+        } else if used < available * 95 / 100 {
+            ComponentStatus::Degraded
+        } else {
+            ComponentStatus::Unhealthy
+        };
+
+        MemoryHealth {
+            status,
+            used_mb: used / 1024 / 1024,
+            available_mb: available / 1024 / 1024,
+        }
+    }
+
+    /// 就绪检查
+    pub async fn check_ready(&self) -> ReadyStatus {
+        let db_ready = self.check_database().await.status != ComponentStatus::Unhealthy;
+        let llm_ready = self.llm_manager.is_available().await;
+        let config_ready = self.config.is_valid();
+
+        ReadyStatus {
+            ready: db_ready && config_ready,
+            checks: ChecksStatus {
+                database: db_ready,
+                llm: llm_ready,
+                config: config_ready,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReadyStatus {
+    pub ready: bool,
+    pub checks: ChecksStatus,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChecksStatus {
+    pub database: bool,
+    pub llm: bool,
+    pub config: bool,
+}
+
+// API 路由
+pub fn health_routes() -> Router<HealthChecker> {
+    Router::new()
+        .route("/health", get(health_handler))
+        .route("/health/detail", get(health_detail_handler))
+        .route("/ready", get(ready_handler))
+        .route("/live", get(live_handler))
+}
+
+async fn health_handler(
+    State(checker): State<HealthChecker>,
+) -> Json<HealthStatus> {
+    Json(checker.check_basic().await)
+}
+
+async fn health_detail_handler(
+    State(checker): State<HealthChecker>,
+) -> Json<HealthStatus> {
+    Json(checker.check_detail().await)
+}
+
+async fn ready_handler(
+    State(checker): State<HealthChecker>,
+) -> Json<ReadyStatus> {
+    Json(checker.check_ready().await)
+}
+
+async fn live_handler() -> Json<serde_json::Value> {
+    Json(serde_json::json!({ "alive": true }))
+}
+```
+
+#### systemd 配置
+
+```ini
+# /etc/systemd/system/flavors-game.service
+[Unit]
+Description=Flavors Across Two Decades Game Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/flavors-game
+Restart=on-failure
+RestartSec=10
+
+# 健康检查配置
+ExecStartPre=/usr/bin/curl -f http://localhost:8080/ready || exit 1
+ExecReload=/bin/kill -HUP $MAINPID
+
+# 资源限制
+LimitNOFILE=65536
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ### 10.1 HTTP REST API
 
 ```
@@ -8253,6 +11995,11 @@ backend/
 | **统计系统** | 7 类统计数据（财务/客流/顾客/菜品/运营/里程碑/趋势），支持可视化 |
 | **数据库索引** | 为高频查询字段建立索引（save_id、时间戳、类型字段等） |
 | **人员管理** | 无员工系统，盼盼独立管理所有功能，体现机器人主角特色 |
+| **种植系统** | 后院 5 级等级，5 块菜地，5 类作物（蔬菜/香料/花卉/特殊/异星） |
+| **作物生长** | 5 阶段生长（播种/发芽/生长/成熟/枯萎），受季节/天气/肥力影响 |
+| **病虫害系统** | 12 种病虫害类型，5 级严重程度，10 种治疗方法 |
+| **种植自动化** | 后院 3 级解锁自动浇水，4 级解锁自动虫检，5 级解锁自动收获 |
+| **园艺模块** | 盼盼园艺技能 1-10 级，影响播种成功率/生长速度/产量/自留种能力 |
 
 ---
 
