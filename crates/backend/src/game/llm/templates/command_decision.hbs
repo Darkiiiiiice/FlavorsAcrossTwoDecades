@@ -1,0 +1,16 @@
+主人发来了指令："{{command}}"
+
+请分析这个指令并做出决策：
+1. 你是否理解这个指令？
+2. 你打算如何执行？（如果执行的话）
+3. 你是否同意执行？如果不同意，原因是什么？
+
+请以 JSON 格式返回：
+{
+  "understood": true/false,
+  "interpretation": "你对指令的理解",
+  "will_execute": true/false,
+  "execution_plan": "执行计划",
+  "modification": "如果需要修改指令，说明修改内容",
+  "response_to_player": "对主人说的话"
+}

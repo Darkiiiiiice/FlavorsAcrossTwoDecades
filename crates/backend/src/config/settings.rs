@@ -75,12 +75,21 @@ pub struct LlmConfig {
     /// 基础 URL
     #[serde(default = "default_base_url")]
     pub base_url: String,
+    /// 端口号
+    #[serde(default = "default_port")]
+    pub port: u16,
     /// 超时时间（秒)
     #[serde(default = "default_timeout_seconds")]
     pub timeout_seconds: u64,
     /// 最大重试次数
     #[serde(default = "default_max_retries")]
     pub max_retries: u32,
+    /// 温度参数
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+    /// 最大 token 数
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: u32,
 }
 
 fn default_provider() -> String {
@@ -92,7 +101,11 @@ fn default_model() -> String {
 }
 
 fn default_base_url() -> String {
-    "http://localhost:11434".to_string()
+    "http://localhost".to_string()
+}
+
+fn default_port() -> u16 {
+    11434
 }
 
 fn default_max_retries() -> u32 {
@@ -101,6 +114,14 @@ fn default_max_retries() -> u32 {
 
 fn default_timeout_seconds() -> u64 {
     60
+}
+
+fn default_temperature() -> f32 {
+    0.8
+}
+
+fn default_max_tokens() -> u32 {
+    2048
 }
 
 /// 游戏配置

@@ -54,6 +54,9 @@ pub enum GameError {
     #[error("LLM 服务暂时不可用")]
     LlmUnavailable,
 
+    #[error("LLM 调用失败: {0}")]
+    LlmError(String),
+
     #[error("服务内部错误: {request_id}")]
     Internal { request_id: String },
 
@@ -198,6 +201,7 @@ impl GameError {
             GameError::ConditionNotMet { .. } => StatusCode::FAILED_DEPENDENCY,
             GameError::Cooldown { .. } => StatusCode::TOO_MANY_REQUESTS,
             GameError::LlmUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            GameError::LlmError(_) => StatusCode::SERVICE_UNAVAILABLE,
             GameError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             GameError::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             GameError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -220,6 +224,7 @@ impl GameError {
             GameError::ConditionNotMet { .. } => "E103",
             GameError::Cooldown { .. } => "E104",
             GameError::LlmUnavailable => "E201",
+            GameError::LlmError(_) => "E202",
             GameError::Internal { .. } => "E500",
             GameError::RateLimited { .. } => "E429",
             GameError::IncompatibleVersion { .. } => "E301",
@@ -332,4 +337,7 @@ impl IntoResponse for GameError {
 }
 
 /// 结果类型别名
-pub type GameResult<T> = Result<T, GameError>;
+pub type Result<T> = std::result::Result<T, GameError>;
+
+/// 通用 Result 类型（兼容性别名）
+pub type GameResult<T> = Result<T>;
