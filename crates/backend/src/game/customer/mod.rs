@@ -1,11 +1,13 @@
 //! 顾客系统模块
 
+mod ai_generator;
 mod customer;
 mod order;
 mod preference;
 mod review;
 mod vip;
 
+pub use ai_generator::{AICustomerGenerator, AIGeneratedCustomer};
 pub use customer::{Customer, CustomerType};
 pub use order::{Order, OrderItem, OrderStatus};
 pub use preference::{DietaryRestriction, FlavorPreference, Preference};
@@ -14,7 +16,11 @@ pub use vip::{VIPLevel, VIPStatus};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
+
+use crate::config::LlmConfig;
+use crate::error::Result;
 
 /// 顾客管理器
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +37,9 @@ pub struct CustomerManager {
     pub next_customer_id: u32,
     /// 最后更新时间
     pub updated_at: DateTime<Utc>,
+    /// AI 生成器是否可用（不序列化，因为 Arc 不可序列化）
+    #[serde(skip)]
+    pub ai_generator: Option<Arc<AICustomerGenerator>>,
 }
 
 impl CustomerManager {
@@ -43,15 +52,49 @@ impl CustomerManager {
             vip_customers: Vec::new(),
             next_customer_id: 1,
             updated_at: Utc::now(),
+            ai_generator: None,
         }
     }
 
-    /// 生成新顾客
+    /// 创建带 AI 生成器的顾客管理器
+    pub fn with_ai(save_id: Uuid, llm_config: LlmConfig) -> Result<Self> {
+        let ai_generator = AICustomerGenerator::new(llm_config)?;
+        Ok(Self {
+            save_id,
+            active_customers: Vec::new(),
+            customer_history: Vec::new(),
+            vip_customers: Vec::new(),
+            next_customer_id: 1,
+            updated_at: Utc::now(),
+            ai_generator: Some(Arc::new(ai_generator)),
+        })
+    }
+
+    /// 设置 AI 生成器
+    pub fn set_ai_generator(&mut self, config: LlmConfig) -> Result<()> {
+        self.ai_generator = Some(Arc::new(AICustomerGenerator::new(config)?));
+        Ok(())
+    }
+
+    /// 生成新顾客（随机）
     pub fn generate_customer(&mut self) -> Customer {
         let customer = Customer::random(self.next_customer_id);
         self.next_customer_id += 1;
         self.updated_at = Utc::now();
         customer
+    }
+
+    /// 使用 AI 生成顾客
+    pub async fn generate_customer_ai(&mut self) -> Result<Customer> {
+        let customer = if let Some(ref generator) = self.ai_generator {
+            generator.generate_customer(self.next_customer_id).await?
+        } else {
+            // 如果 AI 生成器不可用，回退到随机生成
+            Customer::random(self.next_customer_id)
+        };
+        self.next_customer_id += 1;
+        self.updated_at = Utc::now();
+        Ok(customer)
     }
 
     /// 添加顾客到小馆
@@ -87,7 +130,7 @@ impl CustomerManager {
     }
 
     /// 更新顾客好感度
-    pub fn update_affinity(&mut self, customer_id: Uuid, delta: i32) -> Result<(), String> {
+    pub fn update_affinity(&mut self, customer_id: Uuid, delta: i32) -> std::result::Result<(), String> {
         if let Some(customer) = self.get_customer_mut(customer_id) {
             customer.update_affinity(delta);
 
