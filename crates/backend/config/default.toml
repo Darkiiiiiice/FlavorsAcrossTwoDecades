@@ -1,0 +1,27 @@
+# 默认配置文件
+
+[server]
+host = "127.0.0.1"
+port = 3000
+
+[database]
+url = "sqlite:target/debug/flavors_game.db"
+
+[llm]
+provider = "ollama"
+model = "qwen3:1.7b"
+base_url = "http://localhost:11434"
+timeout_seconds = 60
+max_retries = 3
+
+[game]
+# 初始通信延迟范围（秒）
+min_communication_delay = 1
+max_communication_delay = 50
+# 自动存档间隔（秒）
+auto_save_interval = 300
+# 游戏版本
+save_version = 1
+
+[logging]
+level = "info"

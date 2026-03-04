@@ -1,0 +1,24 @@
+# 生产环境配置
+
+[server]
+host = "0.0.0.0"
+port = 3000
+
+[database]
+url = "sqlite:/var/lib/flavors-game/flavors_game.db?mode=rwc"
+
+[llm]
+provider = "ollama"
+model = "qwen3:1.7b"
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+max_retries = 5
+
+[game]
+min_communication_delay = 1
+max_communication_delay = 50
+auto_save_interval = 300
+save_version = 1
+
+[logging]
+level = "warn"

@@ -1,0 +1,14 @@
+[package]
+name = "flavors-frontend"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "flavors-frontend"
+path = "src/main.rs"
+
+[dependencies]
+# 异步运行时
+tokio = { workspace = true }
