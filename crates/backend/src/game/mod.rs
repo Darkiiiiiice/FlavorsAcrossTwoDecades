@@ -1,5 +1,6 @@
 //! 游戏核心模块
 
+pub mod achievement;
 pub mod command;
 pub mod customer;
 pub mod engine;
@@ -7,11 +8,13 @@ pub mod event;
 pub mod garden;
 pub mod llm;
 pub mod memory;
+pub mod neighbor;
 pub mod panpan;
 pub mod recipe;
 pub mod shop;
 pub mod time;
 pub mod travel;
+pub mod weather;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,6 +24,10 @@ use crate::config::LlmConfig;
 use crate::db::DbPool;
 
 // 重新导出常用类型
+pub use achievement::{
+    Achievement, AchievementCategory, AchievementCondition, AchievementManager, AchievementRarity,
+    AchievementStatus,
+};
 pub use command::{Command, CommandQueue, CommandStatus};
 pub use customer::{
     Customer, CustomerManager, CustomerType, DietaryRestriction, FlavorPreference, Order,
@@ -36,6 +43,10 @@ pub use memory::{
     MemoryContent, MemoryFragment, MemoryFragmentType, MemoryManager, MemoryRarity,
     SensoryMemory, Sense, UnlockCondition, UnlockConditionType, UnlockContext,
 };
+pub use neighbor::{
+    AffinityLevel, Interaction, InteractionManager, InteractionResult, InteractionType,
+    Neighbor, NeighborAbility, NeighborManager, NeighborRelation,
+};
 pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
 pub use recipe::{
     Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
@@ -46,6 +57,10 @@ pub use time::{CommunicationDelay, TimeSystem};
 pub use travel::{
     Destination, DestinationCategory, DestinationManager, Travel, TravelCondition,
     TravelManager, TravelPhoto, TravelReward, TravelRewardType, TravelStatus,
+};
+pub use weather::{
+    EnvironmentManager, EnvironmentState, Holiday, HolidayManager, HolidayType,
+    Weather, WeatherEffect, WeatherManager, WeatherType,
 };
 
 /// API 状态
