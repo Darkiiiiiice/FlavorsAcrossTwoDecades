@@ -1,0 +1,8 @@
+[
+  {
+    "label": "Build Backend",
+    "program": "cargo",
+    "args": ["build"],
+    "cwd": "$ZED_WORKTREE_ROOT"
+  }
+]

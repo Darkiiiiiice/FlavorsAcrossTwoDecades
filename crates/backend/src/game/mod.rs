@@ -1,6 +1,7 @@
 //! 游戏核心模块
 
 pub mod command;
+pub mod customer;
 pub mod engine;
 pub mod event;
 pub mod garden;
@@ -18,9 +19,15 @@ use crate::db::DbPool;
 
 // 重新导出常用类型
 pub use command::{Command, CommandQueue, CommandStatus};
+pub use customer::{
+    Customer, CustomerManager, CustomerType, DietaryRestriction, FlavorPreference, Order,
+    OrderItem, OrderStatus, Preference, Review, ReviewSentiment, VIPLevel, VIPStatus,
+};
 pub use engine::GameEngine;
 pub use event::{EventDispatcher, GameEvent, GameEventType};
-pub use garden::{Crop, CropType, Garden, GardenPlot, GrowthStage, PestType, PlotState, Rarity, Season};
+pub use garden::{
+    Crop, CropType, Garden, GardenPlot, GrowthStage, PestType, PlotState, Rarity, Season,
+};
 pub use llm::{create_llm_manager, LlmManager};
 pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
 pub use shop::{FacilityZone, Finance, Inventory, Reputation, Shop, ZoneLevel};
