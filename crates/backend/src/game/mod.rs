@@ -4,6 +4,7 @@ pub mod command;
 pub mod engine;
 pub mod event;
 pub mod llm;
+pub mod panpan;
 pub mod time;
 
 use std::sync::Arc;
@@ -18,6 +19,7 @@ pub use command::{Command, CommandQueue, CommandStatus};
 pub use engine::GameEngine;
 pub use event::{EventDispatcher, GameEvent, GameEventType};
 pub use llm::{create_llm_manager, LlmManager};
+pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
 pub use time::{CommunicationDelay, TimeSystem};
 
 /// API 状态
