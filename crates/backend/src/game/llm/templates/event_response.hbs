@@ -1,0 +1,17 @@
+发生了事件："{{event_description}}"
+
+## 事件详情
+{{event_details}}
+
+请决定如何应对：
+1. 这个事件的影响是什么？
+2. 你应该如何处理？
+
+请以 JSON 格式返回：
+{
+  "understood": true,
+  "interpretation": "事件分析",
+  "will_execute": true,
+  "execution_plan": "应对方案",
+  "response_to_player": "对主人的汇报"
+}
