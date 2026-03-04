@@ -7,8 +7,10 @@ pub mod event;
 pub mod garden;
 pub mod llm;
 pub mod panpan;
+pub mod recipe;
 pub mod shop;
 pub mod time;
+pub mod travel;
 
 use std::sync::Arc;
 use std::time::Instant;
@@ -30,8 +32,16 @@ pub use garden::{
 };
 pub use llm::{create_llm_manager, LlmManager};
 pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
+pub use recipe::{
+    Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
+    IngredientQuality, Recipe, RecipeCategory, RecipeManager, RecipeSource, RecipeStatus,
+};
 pub use shop::{FacilityZone, Finance, Inventory, Reputation, Shop, ZoneLevel};
 pub use time::{CommunicationDelay, TimeSystem};
+pub use travel::{
+    Destination, DestinationCategory, DestinationManager, Travel, TravelCondition,
+    TravelManager, TravelPhoto, TravelReward, TravelRewardType, TravelStatus,
+};
 
 /// API 状态
 #[derive(Clone)]
