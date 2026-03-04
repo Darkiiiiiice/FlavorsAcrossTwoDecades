@@ -6,6 +6,7 @@ pub mod engine;
 pub mod event;
 pub mod garden;
 pub mod llm;
+pub mod memory;
 pub mod panpan;
 pub mod recipe;
 pub mod shop;
@@ -31,6 +32,10 @@ pub use garden::{
     Crop, CropType, Garden, GardenPlot, GrowthStage, PestType, PlotState, Rarity, Season,
 };
 pub use llm::{create_llm_manager, LlmManager};
+pub use memory::{
+    MemoryContent, MemoryFragment, MemoryFragmentType, MemoryManager, MemoryRarity,
+    SensoryMemory, Sense, UnlockCondition, UnlockConditionType, UnlockContext,
+};
 pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
 pub use recipe::{
     Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
