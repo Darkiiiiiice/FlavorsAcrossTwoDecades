@@ -2,13 +2,15 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use axum::{Router, routing::get};
+use axum::Router;
 use clap::Parser;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use flavors_backend::api::{
     create_save, delete_save, get_save, health_check, list_saves, liveness_check, readiness_check,
+    send_command, list_commands, get_command,
+    send_message, get_dialogue_history, get_message,
     ws_handler, ApiDoc,
 };
 use flavors_backend::config::Settings;
@@ -76,18 +78,24 @@ fn create_router(state: Arc<AppState>) -> Router {
     // API 路由
     let api_routes = Router::new()
         // 健康检查
-        .route("/health", get(health_check))
-        .route("/health/ready", get(readiness_check))
-        .route("/health/live", get(liveness_check))
+        .route("/health", axum::routing::get(health_check))
+        .route("/health/ready", axum::routing::get(readiness_check))
+        .route("/health/live", axum::routing::get(liveness_check))
         // WebSocket
-        .route("/ws", get(ws_handler))
+        .route("/ws", axum::routing::get(ws_handler))
         // 存档 API
-        .route("/saves", get(list_saves).post(create_save))
-        .route("/saves/{save_id}", get(get_save).delete(delete_save));
+        .route("/saves", axum::routing::get(list_saves).post(create_save))
+        .route("/saves/{save_id}", axum::routing::get(get_save).delete(delete_save))
+        // 指令 API
+        .route("/saves/{save_id}/commands", axum::routing::get(list_commands).post(send_command))
+        .route("/saves/{save_id}/commands/{command_id}", axum::routing::get(get_command))
+        // 对话 API
+        .route("/saves/{save_id}/dialogues", axum::routing::get(get_dialogue_history).post(send_message))
+        .route("/saves/{save_id}/dialogues/{message_id}", axum::routing::get(get_message));
 
     // 合并所有路由
     Router::new()
-        .nest("/api", api_routes)
+        .nest("/api/v1", api_routes)
         // Swagger UI
         .merge(ApiDoc::swagger_ui())
         .with_state(state)

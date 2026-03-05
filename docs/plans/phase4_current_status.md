@@ -2,7 +2,7 @@
 
 **分支**: `feature/phase4-integration-testing`
 **开始时间**: 2026-03-05
-**当前阶段**: 第二阶段 - 完善仓储层
+**当前阶段**: 第三阶段 - 完善 API 层
 
 ---
 
@@ -14,17 +14,21 @@
 - ✅ 修复 `save_repository.rs` 的编译错误
 - ✅ 重构 `saves.rs` API，使用仓储层
 - ✅ 实现 `CommandRepository` 完整功能
+- ✅ 实现 `DialogueRepository` 完整功能
+- ✅ 创建指令 API 端点（发送、查询、列表）
+- ✅ 创建对话 API 端点（发送、查询、历史）
+- ✅ 更新路由配置，添加新端点
 - ✅ 项目成功编译（只有警告，无错误）
 
 ---
 
 ## 🔄 进行中
 
-### 第二阶段：完善仓储层
-- [x] SaveRepository - 存档管理（已完成）
-- [x] CommandRepository - 指令管理（已完成）
-- [ ] DialogueRepository - 对话管理
-- [ ] 其他子系统仓储
+### 第三阶段：完善 API 层
+- [x] 存档管理 API（已完成）
+- [x] 指令系统 API（已完成）
+- [x] 对话系统 API（已完成）
+- [ ] 子系统 API（小馆、菜园、旅行等）
 
 ---
 
