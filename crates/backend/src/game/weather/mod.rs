@@ -1,12 +1,13 @@
+#![allow(clippy::module_inception)]
 //! 天气与节假日系统模块
 //!
 //! 管理游戏中的天气变化和节假日效果
 
-mod weather;
 mod holiday;
+mod weather;
 
-pub use weather::{Weather, WeatherType, WeatherEffect, WeatherManager};
-pub use holiday::{Holiday, HolidayType, HolidayManager};
+pub use holiday::{Holiday, HolidayManager, HolidayType};
+pub use weather::{Weather, WeatherEffect, WeatherManager, WeatherType};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -75,10 +76,10 @@ impl EnvironmentState {
         }
 
         self.active_effects = vec![weather.effect().description.clone()];
-        if let Some(ref holiday) = self.holiday {
-            if let Some(ref holiday_effect) = holiday.effect().description {
-                self.active_effects.push(holiday_effect.clone());
-            }
+        if let Some(ref holiday) = self.holiday
+            && let Some(ref holiday_effect) = holiday.effect().description
+        {
+            self.active_effects.push(holiday_effect.clone());
         }
         self.weather = weather;
         self.updated_at = Utc::now();
@@ -114,7 +115,8 @@ impl EnvironmentManager {
     pub fn update(&mut self, date: chrono::NaiveDate) {
         // 更新天气
         self.weather_manager.update_weather();
-        self.state.set_weather(self.weather_manager.current_weather.clone());
+        self.state
+            .set_weather(self.weather_manager.current_weather.clone());
 
         // 检查节假日
         if let Some(holiday) = self.holiday_manager.get_holiday(date) {

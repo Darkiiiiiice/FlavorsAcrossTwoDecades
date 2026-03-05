@@ -39,16 +39,31 @@ impl DialogueMessage {
 
     /// 创建玩家消息
     pub fn player_message(save_id: Uuid, content: String) -> Self {
-        Self::new(save_id, "player".to_string(), content, "command".to_string())
+        Self::new(
+            save_id,
+            "player".to_string(),
+            content,
+            "command".to_string(),
+        )
     }
 
     /// 创建盼盼消息
     pub fn panpan_message(save_id: Uuid, content: String) -> Self {
-        Self::new(save_id, "panpan".to_string(), content, "response".to_string())
+        Self::new(
+            save_id,
+            "panpan".to_string(),
+            content,
+            "response".to_string(),
+        )
     }
 
     /// 创建系统消息
     pub fn system_message(save_id: Uuid, content: String) -> Self {
-        Self::new(save_id, "system".to_string(), content, "notification".to_string())
+        Self::new(
+            save_id,
+            "system".to_string(),
+            content,
+            "notification".to_string(),
+        )
     }
 }

@@ -102,7 +102,9 @@ impl AchievementManager {
     pub fn get_completed_achievements(&self) -> Vec<&Achievement> {
         self.achievements
             .iter()
-            .filter(|a| a.status == AchievementStatus::Completed || a.status == AchievementStatus::Claimed)
+            .filter(|a| {
+                a.status == AchievementStatus::Completed || a.status == AchievementStatus::Claimed
+            })
             .collect()
     }
 
@@ -172,7 +174,10 @@ impl AchievementManager {
             let achievements = self.get_achievements_by_category(category);
             let completed = achievements
                 .iter()
-                .filter(|a| a.status == AchievementStatus::Completed || a.status == AchievementStatus::Claimed)
+                .filter(|a| {
+                    a.status == AchievementStatus::Completed
+                        || a.status == AchievementStatus::Claimed
+                })
                 .count();
 
             stats.insert(

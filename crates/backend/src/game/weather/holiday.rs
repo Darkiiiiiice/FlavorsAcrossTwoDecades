@@ -87,11 +87,7 @@ impl HolidayEffect {
         Self {
             customer_flow_modifier: 0.5,
             description: Some("新春佳节，团圆聚餐需求旺盛".to_string()),
-            special_dishes: vec![
-                "饺子".to_string(),
-                "年糕".to_string(),
-                "鱼".to_string(),
-            ],
+            special_dishes: vec!["饺子".to_string(), "年糕".to_string(), "鱼".to_string()],
             special_effects: vec!["红包活动".to_string(), "团圆宴".to_string()],
         }
     }

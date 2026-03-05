@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::db::models::command::Command;
 use crate::db::repositories::command::CommandRepository;
 use crate::error::{GameError, GameResult};
-use crate::game::command::CommandStatus;
 use crate::game::AppState;
+use crate::game::command::CommandStatus;
 
 /// 发送指令请求
 #[derive(Debug, Deserialize, ToSchema)]
@@ -83,10 +83,8 @@ pub async fn send_command(
     Path(save_id): Path<String>,
     Json(payload): Json<SendCommandRequest>,
 ) -> GameResult<Json<CommandResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     // 获取配置的通信延迟（240-600秒，即4-10分钟）
@@ -121,19 +119,15 @@ pub async fn list_commands(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<CommandListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = CommandRepository::new(state.db_pool.pool().clone());
     let commands = repo.find_by_save_id(save_id).await?;
 
-    let command_responses: Vec<CommandResponse> = commands
-        .into_iter()
-        .map(CommandResponse::from)
-        .collect();
+    let command_responses: Vec<CommandResponse> =
+        commands.into_iter().map(CommandResponse::from).collect();
 
     Ok(Json(CommandListResponse {
         total: command_responses.len(),
@@ -159,25 +153,22 @@ pub async fn get_command(
     State(state): State<Arc<AppState>>,
     Path((save_id, command_id)): Path<(String, String)>,
 ) -> GameResult<Json<CommandResponse>> {
-    let _save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid save_id UUID: {}", e),
-        }
+    let _save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid save_id UUID: {}", e),
     })?;
 
-    let command_id = Uuid::parse_str(&command_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid command_id UUID: {}", e),
-        }
+    let command_id = Uuid::parse_str(&command_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid command_id UUID: {}", e),
     })?;
 
     let repo = CommandRepository::new(state.db_pool.pool().clone());
-    let command = repo.find_by_id(command_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let command = repo
+        .find_by_id(command_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Command".to_string(),
             entity_id: command_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(CommandResponse::from(command)))
 }

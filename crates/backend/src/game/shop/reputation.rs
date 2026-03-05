@@ -46,7 +46,8 @@ impl Reputation {
         let neighbor_score = self.neighbor_relation * 0.15;
         let regular_score = self.regular_customer_bonus * 0.10;
 
-        let raw_score = dish_score + service_score + environment_score + neighbor_score + regular_score;
+        let raw_score =
+            dish_score + service_score + environment_score + neighbor_score + regular_score;
 
         // 应用上限
         self.score = raw_score.min(reputation_cap as f32);

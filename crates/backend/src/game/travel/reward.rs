@@ -197,21 +197,28 @@ impl RewardGenerator {
 
         // 生成菜谱奖励
         if !destination.available_recipes.is_empty() {
-            let recipe_count = rng.random_range(1..=2).min(destination.available_recipes.len());
+            let recipe_count = rng
+                .random_range(1..=2)
+                .min(destination.available_recipes.len());
             let mut available = destination.available_recipes.clone();
 
             for _ in 0..recipe_count {
                 if !available.is_empty() {
                     let idx = rng.random_range(0..available.len());
                     let recipe_id = available.remove(idx);
-                    rewards.push(TravelReward::recipe(&recipe_id, &format!("菜谱：{}", recipe_id)));
+                    rewards.push(TravelReward::recipe(
+                        &recipe_id,
+                        &format!("菜谱：{}", recipe_id),
+                    ));
                 }
             }
         }
 
         // 生成食材奖励
         if !destination.special_ingredients.is_empty() {
-            let ingredient_count = rng.random_range(1..=3).min(destination.special_ingredients.len());
+            let ingredient_count = rng
+                .random_range(1..=3)
+                .min(destination.special_ingredients.len());
             let mut available = destination.special_ingredients.clone();
 
             for _ in 0..ingredient_count {
@@ -266,7 +273,11 @@ impl RewardGenerator {
                 title,
                 photo_type,
             )
-            .with_description(&format!("在{}拍摄的第{}张照片", destination.name, i + 1));
+            .with_description(&format!(
+                "在{}拍摄的第{}张照片",
+                destination.name,
+                i + 1
+            ));
 
             photos.push(photo);
         }

@@ -22,7 +22,7 @@ impl ShopRepository {
         sqlx::query(
             r#"INSERT INTO shop_states (save_id, name, funds, reputation, restaurant_level,
                kitchen_level, backyard_level, workshop_level)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(state.save_id.to_string())
         .bind(&state.name)
@@ -44,7 +44,7 @@ impl ShopRepository {
         let row = sqlx::query_as::<_, ShopStateRow>(
             r#"SELECT save_id, name, funds, reputation, restaurant_level,
                kitchen_level, backyard_level, workshop_level
-               FROM shop_states WHERE save_id = ?"#
+               FROM shop_states WHERE save_id = ?"#,
         )
         .bind(save_id.to_string())
         .fetch_optional(&self.pool)
@@ -62,7 +62,7 @@ impl ShopRepository {
         sqlx::query(
             r#"UPDATE shop_states SET name = ?, funds = ?, reputation = ?,
                restaurant_level = ?, kitchen_level = ?, backyard_level = ?, workshop_level = ?
-               WHERE save_id = ?"#
+               WHERE save_id = ?"#,
         )
         .bind(&state.name)
         .bind(state.funds as i64)
@@ -95,7 +95,7 @@ impl ShopRepository {
     pub async fn create_facility(&self, facility: &FacilityRecord) -> GameResult<()> {
         sqlx::query(
             r#"INSERT INTO facilities (id, save_id, zone, name, level, condition, upgrade_progress)
-               VALUES (?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(facility.id.to_string())
         .bind(facility.save_id.to_string())
@@ -115,7 +115,7 @@ impl ShopRepository {
     pub async fn find_facilities(&self, save_id: Uuid) -> GameResult<Vec<FacilityRecord>> {
         let rows = sqlx::query_as::<_, FacilityRow>(
             r#"SELECT id, save_id, zone, name, level, condition, upgrade_progress
-               FROM facilities WHERE save_id = ?"#
+               FROM facilities WHERE save_id = ?"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
@@ -131,7 +131,7 @@ impl ShopRepository {
     pub async fn update_facility(&self, facility: &FacilityRecord) -> GameResult<()> {
         sqlx::query(
             r#"UPDATE facilities SET level = ?, condition = ?, upgrade_progress = ?
-               WHERE id = ?"#
+               WHERE id = ?"#,
         )
         .bind(facility.level as i64)
         .bind(facility.condition as i64)
@@ -160,10 +160,8 @@ struct ShopStateRow {
 
 impl ShopStateRow {
     fn into_state(self) -> GameResult<ShopState> {
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
         Ok(ShopState {
@@ -193,16 +191,12 @@ struct FacilityRow {
 
 impl FacilityRow {
     fn into_facility_record(self) -> GameResult<FacilityRecord> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid save_id UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         Ok(FacilityRecord {

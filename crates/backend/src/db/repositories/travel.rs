@@ -42,7 +42,7 @@ impl TravelRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<Travel>> {
         let row = sqlx::query_as::<_, TravelRow>(
             r#"SELECT id, save_id, destination, started_at, expected_return, status, rewards
-               FROM travels WHERE id = ?"#
+               FROM travels WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -59,29 +59,25 @@ impl TravelRepository {
     pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Vec<Travel>> {
         let rows = sqlx::query_as::<_, TravelRow>(
             r#"SELECT id, save_id, destination, started_at, expected_return, status, rewards
-               FROM travels WHERE save_id = ? ORDER BY started_at DESC"#
+               FROM travels WHERE save_id = ? ORDER BY started_at DESC"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_travel())
-            .collect()
+        rows.into_iter().map(|row| row.into_travel()).collect()
     }
 
     /// 更新旅行状态
     pub async fn update(&self, travel: &Travel) -> GameResult<()> {
-        sqlx::query(
-            r#"UPDATE travels SET status = ?, rewards = ? WHERE id = ?"#
-        )
-        .bind(status_to_string(&travel.status))
-        .bind(&travel.rewards)
-        .bind(travel.id.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
+        sqlx::query(r#"UPDATE travels SET status = ?, rewards = ? WHERE id = ?"#)
+            .bind(status_to_string(&travel.status))
+            .bind(&travel.rewards)
+            .bind(travel.id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
 
         Ok(())
     }
@@ -121,20 +117,24 @@ struct TravelRow {
 
 impl TravelRow {
     fn into_travel(self) -> GameResult<Travel> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid UUID: {}", e) }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid save_id UUID: {}", e) }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let started_at = DateTime::parse_from_rfc3339(&self.started_at)
-            .map_err(|e| GameError::Validation { details: format!("Invalid started_at: {}", e) })?
+            .map_err(|e| GameError::Validation {
+                details: format!("Invalid started_at: {}", e),
+            })?
             .with_timezone(&Utc);
 
         let expected_return = DateTime::parse_from_rfc3339(&self.expected_return)
-            .map_err(|e| GameError::Validation { details: format!("Invalid expected_return: {}", e) })?
+            .map_err(|e| GameError::Validation {
+                details: format!("Invalid expected_return: {}", e),
+            })?
             .with_timezone(&Utc);
 
         let status = string_to_status(&self.status)?;

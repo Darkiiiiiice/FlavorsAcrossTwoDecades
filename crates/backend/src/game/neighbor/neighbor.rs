@@ -146,7 +146,9 @@ impl Neighbor {
             occupation: "食材批发商".to_string(),
             personality: "精明能干，为人实在，重信誉".to_string(),
             abilities: vec![NeighborAbility::IngredientWholesale],
-            background: "老张经营食材批发生意二十多年，和祖父是老交情。他总能以批发价提供新鲜的食材。".to_string(),
+            background:
+                "老张经营食材批发生意二十多年，和祖父是老交情。他总能以批发价提供新鲜的食材。"
+                    .to_string(),
             favorite_gifts: vec!["香烟".to_string(), "好酒".to_string()],
             disliked_items: vec!["讨价还价".to_string()],
             dialogue_style: "生意人风格，说话简洁".to_string(),
@@ -331,7 +333,10 @@ impl NeighborManager {
     /// 创建新的邻居管理器
     pub fn new() -> Self {
         let neighbors = Self::create_default_neighbors();
-        let relations = neighbors.iter().map(|n| NeighborRelation::new(n.id.clone())).collect();
+        let relations = neighbors
+            .iter()
+            .map(|n| NeighborRelation::new(n.id.clone()))
+            .collect();
 
         Self {
             neighbors,
@@ -363,12 +368,19 @@ impl NeighborManager {
 
     /// 获取关系（可变）
     pub fn get_relation_mut(&mut self, neighbor_id: &str) -> Option<&mut NeighborRelation> {
-        self.relations.iter_mut().find(|r| r.neighbor_id == neighbor_id)
+        self.relations
+            .iter_mut()
+            .find(|r| r.neighbor_id == neighbor_id)
     }
 
     /// 更新好感度
-    pub fn update_affinity(&mut self, neighbor_id: &str, change: i32) -> std::result::Result<u32, String> {
-        let relation = self.get_relation_mut(neighbor_id)
+    pub fn update_affinity(
+        &mut self,
+        neighbor_id: &str,
+        change: i32,
+    ) -> std::result::Result<u32, String> {
+        let relation = self
+            .get_relation_mut(neighbor_id)
             .ok_or_else(|| "邻居不存在".to_string())?;
 
         if change >= 0 {
@@ -380,10 +392,13 @@ impl NeighborManager {
 
     /// 获取所有邻居及关系
     pub fn get_all_with_relations(&self) -> Vec<(&Neighbor, &NeighborRelation)> {
-        self.neighbors.iter().map(|n| {
-            let relation = self.get_relation(&n.id).unwrap();
-            (n, relation)
-        }).collect()
+        self.neighbors
+            .iter()
+            .map(|n| {
+                let relation = self.get_relation(&n.id).unwrap();
+                (n, relation)
+            })
+            .collect()
     }
 
     /// 获取好友列表（好感度 >= 40）

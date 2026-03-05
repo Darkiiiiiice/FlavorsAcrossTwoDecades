@@ -23,7 +23,7 @@ impl CommandRepository {
     pub async fn create(&self, command: &Command) -> GameResult<()> {
         sqlx::query(
             r#"INSERT INTO commands (id, save_id, content, created_at, arrival_time, status, result)
-               VALUES (?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(command.id.to_string())
         .bind(command.save_id.to_string())
@@ -43,7 +43,7 @@ impl CommandRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<Command>> {
         let row = sqlx::query_as::<_, CommandRow>(
             r#"SELECT id, save_id, content, created_at, arrival_time, status, result
-               FROM commands WHERE id = ?"#
+               FROM commands WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -60,16 +60,14 @@ impl CommandRepository {
     pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Vec<Command>> {
         let rows = sqlx::query_as::<_, CommandRow>(
             r#"SELECT id, save_id, content, created_at, arrival_time, status, result
-               FROM commands WHERE save_id = ? ORDER BY created_at DESC"#
+               FROM commands WHERE save_id = ? ORDER BY created_at DESC"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_command())
-            .collect()
+        rows.into_iter().map(|row| row.into_command()).collect()
     }
 
     /// 获取已到达但未完成的指令
@@ -79,7 +77,7 @@ impl CommandRepository {
             r#"SELECT id, save_id, content, created_at, arrival_time, status, result
                FROM commands
                WHERE save_id = ? AND arrival_time <= ? AND status = ?
-               ORDER BY arrival_time ASC"#
+               ORDER BY arrival_time ASC"#,
         )
         .bind(save_id.to_string())
         .bind(now.to_rfc3339())
@@ -88,22 +86,23 @@ impl CommandRepository {
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_command())
-            .collect()
+        rows.into_iter().map(|row| row.into_command()).collect()
     }
 
     /// 更新指令状态
-    pub async fn update_status(&self, id: Uuid, status: CommandStatus, result: Option<String>) -> GameResult<()> {
-        sqlx::query(
-            r#"UPDATE commands SET status = ?, result = ? WHERE id = ?"#
-        )
-        .bind(Self::status_to_string(&status))
-        .bind(&result)
-        .bind(id.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
+    pub async fn update_status(
+        &self,
+        id: Uuid,
+        status: CommandStatus,
+        result: Option<String>,
+    ) -> GameResult<()> {
+        sqlx::query(r#"UPDATE commands SET status = ?, result = ? WHERE id = ?"#)
+            .bind(Self::status_to_string(&status))
+            .bind(&result)
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
 
         Ok(())
     }
@@ -166,16 +165,12 @@ struct CommandRow {
 impl CommandRow {
     /// 将数据库行转换为 Command 模型
     fn into_command(self) -> GameResult<Command> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid save_id UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let created_at = DateTime::parse_from_rfc3339(&self.created_at)

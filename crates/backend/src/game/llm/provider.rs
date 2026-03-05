@@ -116,7 +116,11 @@ impl LlmManager {
     }
 
     /// 生成文本（通用方法）
-    pub async fn generate_text(&self, system_prompt: String, user_message: String) -> Result<String> {
+    pub async fn generate_text(
+        &self,
+        system_prompt: String,
+        user_message: String,
+    ) -> Result<String> {
         let request = LlmRequest {
             system_prompt,
             user_message,

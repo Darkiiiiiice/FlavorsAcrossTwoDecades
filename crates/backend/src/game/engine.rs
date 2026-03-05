@@ -1,7 +1,7 @@
 //! 游戏引擎主循环
 
 use std::sync::Arc;
-use tokio::time::{interval, Duration};
+use tokio::time::{Duration, interval};
 
 use super::command::CommandQueue;
 use super::event::EventDispatcher;

@@ -219,7 +219,9 @@ impl Customer {
 /// 生成随机姓名
 fn generate_random_name() -> String {
     let surnames = vec!["张", "李", "王", "刘", "陈", "杨", "黄", "赵", "吴", "周"];
-    let names = vec!["小明", "小红", "小华", "小丽", "小强", "小芳", "小军", "小燕"];
+    let names = [
+        "小明", "小红", "小华", "小丽", "小强", "小芳", "小军", "小燕",
+    ];
 
     let mut rng = rand::rng();
     let surname = surnames[rng.random_range(0..surnames.len())];

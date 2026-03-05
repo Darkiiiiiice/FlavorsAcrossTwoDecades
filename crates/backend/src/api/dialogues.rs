@@ -96,10 +96,8 @@ pub async fn send_message(
     Path(save_id): Path<String>,
     Json(payload): Json<SendMessageRequest>,
 ) -> GameResult<Json<MessageResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let message = DialogueMessage::player_message(save_id, payload.content);
@@ -128,10 +126,8 @@ pub async fn get_dialogue_history(
     Path(save_id): Path<String>,
     Query(query): Query<MessageQuery>,
 ) -> GameResult<Json<MessageListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = DialogueRepository::new(state.db_pool.pool().clone());
@@ -142,10 +138,8 @@ pub async fn get_dialogue_history(
         repo.find_by_save_id(save_id).await?
     };
 
-    let message_responses: Vec<MessageResponse> = messages
-        .into_iter()
-        .map(MessageResponse::from)
-        .collect();
+    let message_responses: Vec<MessageResponse> =
+        messages.into_iter().map(MessageResponse::from).collect();
 
     Ok(Json(MessageListResponse {
         total: message_responses.len(),
@@ -171,25 +165,22 @@ pub async fn get_message(
     State(state): State<Arc<AppState>>,
     Path((save_id, message_id)): Path<(String, String)>,
 ) -> GameResult<Json<MessageResponse>> {
-    let _save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid save_id UUID: {}", e),
-        }
+    let _save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid save_id UUID: {}", e),
     })?;
 
-    let message_id = Uuid::parse_str(&message_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid message_id UUID: {}", e),
-        }
+    let message_id = Uuid::parse_str(&message_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid message_id UUID: {}", e),
     })?;
 
     let repo = DialogueRepository::new(state.db_pool.pool().clone());
-    let message = repo.find_by_id(message_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let message = repo
+        .find_by_id(message_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Message".to_string(),
             entity_id: message_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(MessageResponse::from(message)))
 }

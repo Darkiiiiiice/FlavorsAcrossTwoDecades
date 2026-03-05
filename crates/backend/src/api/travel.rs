@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::db::models::travel::Travel;
 use crate::db::repositories::travel::TravelRepository;
 use crate::error::{GameError, GameResult};
-use crate::game::travel::TravelStatus;
 use crate::game::AppState;
+use crate::game::travel::TravelStatus;
 
 /// 开始旅行请求
 #[derive(Debug, Deserialize, ToSchema)]
@@ -82,10 +82,8 @@ pub async fn list_travels(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<TravelListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = TravelRepository::new(state.db_pool.pool().clone());
@@ -120,19 +118,18 @@ pub async fn get_travel(
     State(state): State<Arc<AppState>>,
     Path((_save_id, travel_id)): Path<(String, String)>,
 ) -> GameResult<Json<TravelResponse>> {
-    let travel_id = Uuid::parse_str(&travel_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid travel_id UUID: {}", e),
-        }
+    let travel_id = Uuid::parse_str(&travel_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid travel_id UUID: {}", e),
     })?;
 
     let repo = TravelRepository::new(state.db_pool.pool().clone());
-    let travel = repo.find_by_id(travel_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let travel = repo
+        .find_by_id(travel_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Travel".to_string(),
             entity_id: travel_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(TravelResponse::from_travel(travel)))
 }
@@ -156,18 +153,18 @@ pub async fn start_travel(
     Path(save_id): Path<String>,
     Json(payload): Json<StartTravelRequest>,
 ) -> GameResult<Json<TravelResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = TravelRepository::new(state.db_pool.pool().clone());
 
     // 检查是否有进行中的旅行
     let existing_travels = repo.find_by_save_id(save_id).await?;
-    let has_ongoing = existing_travels.iter().any(|t| t.status == TravelStatus::InProgress || t.status == TravelStatus::Preparing);
-    
+    let has_ongoing = existing_travels
+        .iter()
+        .any(|t| t.status == TravelStatus::InProgress || t.status == TravelStatus::Preparing);
+
     if has_ongoing {
         return Err(GameError::Validation {
             details: "Already have an ongoing travel".to_string(),
@@ -200,19 +197,18 @@ pub async fn complete_travel(
     State(state): State<Arc<AppState>>,
     Path((_save_id, travel_id)): Path<(String, String)>,
 ) -> GameResult<Json<TravelResponse>> {
-    let travel_id = Uuid::parse_str(&travel_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid travel_id UUID: {}", e),
-        }
+    let travel_id = Uuid::parse_str(&travel_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid travel_id UUID: {}", e),
     })?;
 
     let repo = TravelRepository::new(state.db_pool.pool().clone());
-    let mut travel = repo.find_by_id(travel_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut travel = repo
+        .find_by_id(travel_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Travel".to_string(),
             entity_id: travel_id.to_string(),
-        }
-    })?;
+        })?;
 
     travel.status = TravelStatus::Completed;
     // TODO: 生成旅行奖励
@@ -238,16 +234,15 @@ pub async fn get_current_travel(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<Option<TravelResponse>>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = TravelRepository::new(state.db_pool.pool().clone());
     let travels = repo.find_by_save_id(save_id).await?;
-    
-    let current = travels.into_iter()
+
+    let current = travels
+        .into_iter()
         .find(|t| t.status == TravelStatus::InProgress || t.status == TravelStatus::Preparing);
 
     Ok(Json(current.map(TravelResponse::from_travel)))

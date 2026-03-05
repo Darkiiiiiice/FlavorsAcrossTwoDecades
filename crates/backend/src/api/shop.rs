@@ -83,19 +83,18 @@ pub async fn get_shop(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<ShopResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = ShopRepository::new(state.db_pool.pool().clone());
-    let shop = repo.find_by_save_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let shop = repo
+        .find_by_save_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "ShopState".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(ShopResponse::from(shop)))
 }
@@ -119,19 +118,18 @@ pub async fn purchase_item(
     Path(save_id): Path<String>,
     Json(_payload): Json<PurchaseRequest>,
 ) -> GameResult<Json<ShopResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = ShopRepository::new(state.db_pool.pool().clone());
-    let shop = repo.find_by_save_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let shop = repo
+        .find_by_save_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "ShopState".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     // TODO: 实际的购买逻辑，包括价格检查、库存更新等
 
@@ -157,19 +155,18 @@ pub async fn update_funds(
     Path(save_id): Path<String>,
     Json(payload): Json<UpdateFundsRequest>,
 ) -> GameResult<Json<ShopResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = ShopRepository::new(state.db_pool.pool().clone());
-    let mut shop = repo.find_by_save_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut shop = repo
+        .find_by_save_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "ShopState".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     shop.funds = payload.funds;
     repo.update(&shop).await?;

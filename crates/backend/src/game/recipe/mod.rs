@@ -1,8 +1,9 @@
+#![allow(clippy::module_inception)]
 //! 菜谱与实验系统模块
 
 mod experiment;
-mod recipe;
 mod ingredient;
+mod recipe;
 
 pub use experiment::{Experiment, ExperimentResult, ExperimentStatus};
 pub use ingredient::{Ingredient, IngredientCategory, IngredientQuality};
@@ -102,7 +103,8 @@ impl RecipeManager {
             }
             ingredient.quantity -= quantity;
             if ingredient.quantity == 0 {
-                self.ingredients.retain(|i| i.ingredient_id != ingredient_id);
+                self.ingredients
+                    .retain(|i| i.ingredient_id != ingredient_id);
             }
             self.updated_at = Utc::now();
             Ok(())
@@ -113,7 +115,9 @@ impl RecipeManager {
 
     /// 获取食材
     pub fn get_ingredient(&self, ingredient_id: &str) -> Option<&Ingredient> {
-        self.ingredients.iter().find(|i| i.ingredient_id == ingredient_id)
+        self.ingredients
+            .iter()
+            .find(|i| i.ingredient_id == ingredient_id)
     }
 
     /// 开始实验

@@ -22,7 +22,7 @@ impl MemoryRepository {
         sqlx::query(
             r#"INSERT INTO memory_fragments (id, save_id, fragment_type, title, content,
                is_unlocked, unlocked_at, trigger_condition)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(fragment.id.to_string())
         .bind(fragment.save_id.to_string())
@@ -67,9 +67,7 @@ impl MemoryRepository {
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_fragment())
-            .collect()
+        rows.into_iter().map(|row| row.into_fragment()).collect()
     }
 
     /// 获取已解锁的记忆碎片
@@ -84,22 +82,18 @@ impl MemoryRepository {
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_fragment())
-            .collect()
+        rows.into_iter().map(|row| row.into_fragment()).collect()
     }
 
     /// 更新记忆碎片（解锁）
     pub async fn update(&self, fragment: &MemoryFragment) -> GameResult<()> {
-        sqlx::query(
-            r#"UPDATE memory_fragments SET is_unlocked = ?, unlocked_at = ? WHERE id = ?"#
-        )
-        .bind(fragment.is_unlocked as i64)
-        .bind(fragment.unlocked_at.map(|t| t.to_rfc3339()))
-        .bind(fragment.id.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
+        sqlx::query(r#"UPDATE memory_fragments SET is_unlocked = ?, unlocked_at = ? WHERE id = ?"#)
+            .bind(fragment.is_unlocked as i64)
+            .bind(fragment.unlocked_at.map(|t| t.to_rfc3339()))
+            .bind(fragment.id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
 
         Ok(())
     }
@@ -119,20 +113,22 @@ struct MemoryRow {
 
 impl MemoryRow {
     fn into_fragment(self) -> GameResult<MemoryFragment> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid UUID: {}", e) }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid save_id UUID: {}", e) }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let unlocked_at = if let Some(t) = self.unlocked_at {
-            Some(DateTime::parse_from_rfc3339(&t)
-                .map_err(|e| GameError::Validation {
-                    details: format!("Invalid unlocked_at: {}", e)
-                })?
-                .with_timezone(&Utc))
+            Some(
+                DateTime::parse_from_rfc3339(&t)
+                    .map_err(|e| GameError::Validation {
+                        details: format!("Invalid unlocked_at: {}", e),
+                    })?
+                    .with_timezone(&Utc),
+            )
         } else {
             None
         };

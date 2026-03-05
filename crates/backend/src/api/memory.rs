@@ -2,7 +2,7 @@
 
 use axum::{
     Json,
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -91,10 +91,8 @@ pub async fn list_memories(
     Path(save_id): Path<String>,
     Query(params): Query<MemoryQueryParams>,
 ) -> GameResult<Json<MemoryListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = MemoryRepository::new(state.db_pool.pool().clone());
@@ -104,10 +102,8 @@ pub async fn list_memories(
         repo.find_by_save_id(save_id).await?
     };
 
-    let memory_responses: Vec<MemoryResponse> = memories
-        .into_iter()
-        .map(MemoryResponse::from)
-        .collect();
+    let memory_responses: Vec<MemoryResponse> =
+        memories.into_iter().map(MemoryResponse::from).collect();
 
     Ok(Json(MemoryListResponse {
         total: memory_responses.len(),
@@ -133,19 +129,18 @@ pub async fn get_memory(
     State(state): State<Arc<AppState>>,
     Path((_save_id, memory_id)): Path<(String, String)>,
 ) -> GameResult<Json<MemoryResponse>> {
-    let memory_id = Uuid::parse_str(&memory_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid memory_id UUID: {}", e),
-        }
+    let memory_id = Uuid::parse_str(&memory_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid memory_id UUID: {}", e),
     })?;
 
     let repo = MemoryRepository::new(state.db_pool.pool().clone());
-    let memory = repo.find_by_id(memory_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let memory = repo
+        .find_by_id(memory_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "MemoryFragment".to_string(),
             entity_id: memory_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(MemoryResponse::from(memory)))
 }
@@ -170,19 +165,18 @@ pub async fn unlock_memory(
     Path((_save_id, memory_id)): Path<(String, String)>,
     Json(_payload): Json<UnlockMemoryRequest>,
 ) -> GameResult<Json<MemoryResponse>> {
-    let memory_id = Uuid::parse_str(&memory_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid memory_id UUID: {}", e),
-        }
+    let memory_id = Uuid::parse_str(&memory_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid memory_id UUID: {}", e),
     })?;
 
     let repo = MemoryRepository::new(state.db_pool.pool().clone());
-    let mut memory = repo.find_by_id(memory_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut memory = repo
+        .find_by_id(memory_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "MemoryFragment".to_string(),
             entity_id: memory_id.to_string(),
-        }
-    })?;
+        })?;
 
     if !memory.is_unlocked {
         memory.is_unlocked = true;

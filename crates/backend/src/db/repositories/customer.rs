@@ -66,9 +66,7 @@ impl CustomerRepository {
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_customer())
-            .collect()
+        rows.into_iter().map(|row| row.into_customer()).collect()
     }
 
     /// 更新顾客记录
@@ -115,17 +113,17 @@ struct CustomerRow {
 
 impl CustomerRow {
     fn into_customer(self) -> GameResult<CustomerRecord> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid UUID: {}", e) }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid save_id UUID: {}", e) }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let last_visit = DateTime::parse_from_rfc3339(&self.last_visit)
             .map_err(|e| GameError::Validation {
-                details: format!("Invalid last_visit: {}", e)
+                details: format!("Invalid last_visit: {}", e),
             })?
             .with_timezone(&Utc);
 

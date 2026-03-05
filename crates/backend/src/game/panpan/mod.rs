@@ -56,7 +56,9 @@ impl Panpan {
 
     /// 获取指定类型的可变模块
     pub fn get_module_mut(&mut self, module_type: ModuleType) -> Option<&mut Module> {
-        self.modules.iter_mut().find(|m| m.module_type == module_type)
+        self.modules
+            .iter_mut()
+            .find(|m| m.module_type == module_type)
     }
 
     /// 消耗能量

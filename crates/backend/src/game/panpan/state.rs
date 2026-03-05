@@ -31,12 +31,9 @@ impl Personality {
 
     /// 调整性格参数（限制在 0-100）
     pub fn adjust(&mut self, business_style: i32, innovation: i32, independence: i32) {
-        self.business_style = (self.business_style as i32 + business_style)
-            .clamp(0, 100) as u32;
-        self.innovation = (self.innovation as i32 + innovation)
-            .clamp(0, 100) as u32;
-        self.independence = (self.independence as i32 + independence)
-            .clamp(0, 100) as u32;
+        self.business_style = (self.business_style as i32 + business_style).clamp(0, 100) as u32;
+        self.innovation = (self.innovation as i32 + innovation).clamp(0, 100) as u32;
+        self.independence = (self.independence as i32 + independence).clamp(0, 100) as u32;
     }
 
     /// 计算性格倾向描述
@@ -70,11 +67,12 @@ impl Personality {
 }
 
 /// 情绪状态
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Emotion {
     /// 开心 - 工作速度×1.1，错误率×0.9
     Happy,
     /// 平静 - 正常状态
+    #[default]
     Calm,
     /// 疲惫 - 工作速度×0.9，错误率×1.2
     Tired,
@@ -86,12 +84,6 @@ pub enum Emotion {
     Lonely,
     /// 兴奋 - 旅行时间×0.9
     Excited,
-}
-
-impl Default for Emotion {
-    fn default() -> Self {
-        Emotion::Calm
-    }
 }
 
 impl Emotion {

@@ -12,8 +12,8 @@ use uuid::Uuid;
 use crate::db::models::recipe::Recipe;
 use crate::db::repositories::recipe::RecipeRepository;
 use crate::error::{GameError, GameResult};
-use crate::game::recipe::{RecipeCategory, RecipeSource, RecipeStatus};
 use crate::game::AppState;
+use crate::game::recipe::{RecipeCategory, RecipeSource, RecipeStatus};
 
 /// 创建菜谱请求
 #[derive(Debug, Deserialize, ToSchema)]
@@ -101,10 +101,8 @@ pub async fn create_recipe(
     Path(save_id): Path<String>,
     Json(payload): Json<CreateRecipeRequest>,
 ) -> GameResult<Json<RecipeResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let category = string_to_category(&payload.category)?;
@@ -143,19 +141,15 @@ pub async fn list_recipes(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<RecipeListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = RecipeRepository::new(state.db_pool.pool().clone());
     let recipes = repo.find_by_save_id(save_id).await?;
 
-    let recipe_responses: Vec<RecipeResponse> = recipes
-        .into_iter()
-        .map(RecipeResponse::from)
-        .collect();
+    let recipe_responses: Vec<RecipeResponse> =
+        recipes.into_iter().map(RecipeResponse::from).collect();
 
     Ok(Json(RecipeListResponse {
         total: recipe_responses.len(),
@@ -181,19 +175,18 @@ pub async fn get_recipe(
     State(state): State<Arc<AppState>>,
     Path((_save_id, recipe_id)): Path<(String, String)>,
 ) -> GameResult<Json<RecipeResponse>> {
-    let recipe_id = Uuid::parse_str(&recipe_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid recipe_id UUID: {}", e),
-        }
+    let recipe_id = Uuid::parse_str(&recipe_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid recipe_id UUID: {}", e),
     })?;
 
     let repo = RecipeRepository::new(state.db_pool.pool().clone());
-    let recipe = repo.find_by_id(recipe_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let recipe = repo
+        .find_by_id(recipe_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Recipe".to_string(),
             entity_id: recipe_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(RecipeResponse::from(recipe)))
 }
@@ -218,10 +211,8 @@ pub async fn update_recipe_status(
     Path((_save_id, recipe_id)): Path<(String, String)>,
     Json(payload): Json<UpdateRecipeStatusRequest>,
 ) -> GameResult<()> {
-    let recipe_id = Uuid::parse_str(&recipe_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid recipe_id UUID: {}", e),
-        }
+    let recipe_id = Uuid::parse_str(&recipe_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid recipe_id UUID: {}", e),
     })?;
 
     let status = string_to_status(&payload.status)?;

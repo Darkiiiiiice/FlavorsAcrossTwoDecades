@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::{MemoryContent, MemoryFragment, MemoryFragmentType, MemoryRarity, UnlockCondition, UnlockContext};
+use super::{
+    MemoryContent, MemoryFragment, MemoryFragmentType, MemoryRarity, UnlockCondition, UnlockContext,
+};
 
 /// 记忆管理器
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,7 +78,9 @@ impl MemoryManager {
         .with_emotion("怀念".to_string())
         .with_emotion("期待".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::trust_level(0));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::trust_level(0));
         fragment
     }
 
@@ -98,7 +102,9 @@ impl MemoryManager {
         .with_emotion("感动".to_string())
         .with_emotion("责任".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::trust_level(30));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::trust_level(30));
         fragment
     }
 
@@ -118,7 +124,9 @@ impl MemoryManager {
         .with_grandfather_quote("第一位顾客的评价，往往是最真实的。".to_string())
         .with_emotion("欣慰".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::trust_level(15));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::trust_level(15));
         fragment
     }
 
@@ -139,7 +147,9 @@ impl MemoryManager {
         .with_sensory(super::Sense::Gustatory, "酸甜适中的汁水在口中绽放".to_string())
         .with_grandfather_quote("简单的菜，才最考验功夫。".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::cook_dish("home_tomato_egg", 1));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::cook_dish("home_tomato_egg", 1));
         fragment
     }
 
@@ -160,7 +170,9 @@ impl MemoryManager {
         .with_sensory(super::Sense::Gustatory, "肥瘦相间的肉块在口中化开".to_string())
         .with_grandfather_quote("做红烧肉不能急，要慢慢来，让每一块肉都吸收足够的味道。".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::cook_dish("home_braised_pork", 3));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::cook_dish("home_braised_pork", 3));
         fragment
     }
 
@@ -180,7 +192,9 @@ impl MemoryManager {
         .with_scene("老王坐在靠窗的位置，面前的花生米和二锅头已经见底。".to_string())
         .with_grandfather_quote("老王啊，是我们这条街的活字典。".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::customer_interaction("old_wang"));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::customer_interaction("old_wang"));
         fragment
     }
 
@@ -200,7 +214,9 @@ impl MemoryManager {
         .with_scene("小美擦着眼泪，笑着说这是她吃过最暖心的饭。".to_string())
         .with_grandfather_quote("帮助别人，不需要什么理由。".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::customer_interaction("little_mei"));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::customer_interaction("little_mei"));
         fragment
     }
 
@@ -221,7 +237,9 @@ impl MemoryManager {
         .with_sensory(super::Sense::Auditory, "远处传来小贩的吆喝声".to_string())
         .with_grandfather_quote("这条街养育了我们，我们也要守护这条街。".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::travel_complete("local"));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::travel_complete("local"));
         fragment
     }
 
@@ -243,7 +261,9 @@ impl MemoryManager {
         .with_emotion("震撼".to_string())
         .with_emotion("感动".to_string()));
 
-        fragment.unlock_conditions.push(UnlockCondition::trust_level(80));
+        fragment
+            .unlock_conditions
+            .push(UnlockCondition::trust_level(80));
         fragment
     }
 

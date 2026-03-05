@@ -62,9 +62,8 @@ impl Decision {
         let json_str = Self::extract_json(response)?;
 
         // 解析 JSON
-        let decision: Decision = serde_json::from_str(&json_str).map_err(|e| {
-            GameError::LlmError(format!("Failed to parse decision JSON: {}", e))
-        })?;
+        let decision: Decision = serde_json::from_str(&json_str)
+            .map_err(|e| GameError::LlmError(format!("Failed to parse decision JSON: {}", e)))?;
 
         Ok(decision)
     }
@@ -81,12 +80,11 @@ impl Decision {
         }
 
         // 尝试找到裸 JSON（以 { 开始，以 } 结束）
-        if let Some(start) = response.find('{') {
-            if let Some(end) = response.rfind('}') {
-                if end > start {
-                    return Ok(response[start..=end].trim().to_string());
-                }
-            }
+        if let Some(start) = response.find('{')
+            && let Some(end) = response.rfind('}')
+            && end > start
+        {
+            return Ok(response[start..=end].trim().to_string());
         }
 
         // 如果找不到 JSON，返回错误

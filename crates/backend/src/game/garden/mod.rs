@@ -44,7 +44,8 @@ impl Garden {
 
         // 添加新的菜地
         if self.plots.len() < self.level as usize {
-            self.plots.push(GardenPlot::new(self.plots.len() as u32 + 1));
+            self.plots
+                .push(GardenPlot::new(self.plots.len() as u32 + 1));
         }
 
         self.updated_at = Utc::now();
@@ -63,9 +64,7 @@ impl Garden {
 
     /// 在指定菜地种植
     pub fn plant(&mut self, plot_id: u32, crop: Crop) -> Result<(), String> {
-        let plot = self
-            .get_plot_mut(plot_id)
-            .ok_or("菜地不存在".to_string())?;
+        let plot = self.get_plot_mut(plot_id).ok_or("菜地不存在".to_string())?;
 
         plot.plant(crop)?;
         self.updated_at = Utc::now();
@@ -74,9 +73,7 @@ impl Garden {
 
     /// 浇水
     pub fn water(&mut self, plot_id: u32) -> Result<(), String> {
-        let plot = self
-            .get_plot_mut(plot_id)
-            .ok_or("菜地不存在".to_string())?;
+        let plot = self.get_plot_mut(plot_id).ok_or("菜地不存在".to_string())?;
 
         plot.water();
         self.updated_at = Utc::now();
@@ -85,9 +82,7 @@ impl Garden {
 
     /// 施肥
     pub fn fertilize(&mut self, plot_id: u32, amount: u32) -> Result<(), String> {
-        let plot = self
-            .get_plot_mut(plot_id)
-            .ok_or("菜地不存在".to_string())?;
+        let plot = self.get_plot_mut(plot_id).ok_or("菜地不存在".to_string())?;
 
         plot.fertilize(amount);
         self.updated_at = Utc::now();
@@ -96,9 +91,7 @@ impl Garden {
 
     /// 收获
     pub fn harvest(&mut self, plot_id: u32) -> Result<(String, u32), String> {
-        let plot = self
-            .get_plot_mut(plot_id)
-            .ok_or("菜地不存在".to_string())?;
+        let plot = self.get_plot_mut(plot_id).ok_or("菜地不存在".to_string())?;
 
         let result = plot.harvest()?;
         self.updated_at = Utc::now();

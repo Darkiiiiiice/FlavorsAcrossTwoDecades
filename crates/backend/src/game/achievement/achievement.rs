@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use super::AchievementReward;
 
@@ -153,7 +152,11 @@ pub enum AchievementConditionType {
 
 impl AchievementCondition {
     /// 创建新条件
-    pub fn new(condition_type: AchievementConditionType, target_value: u32, description: String) -> Self {
+    pub fn new(
+        condition_type: AchievementConditionType,
+        target_value: u32,
+        description: String,
+    ) -> Self {
         Self {
             condition_type,
             target_value,
@@ -217,7 +220,12 @@ pub struct Achievement {
 
 impl Achievement {
     /// 创建新成就
-    pub fn new(id: String, name: String, category: AchievementCategory, rarity: AchievementRarity) -> Self {
+    pub fn new(
+        id: String,
+        name: String,
+        category: AchievementCategory,
+        rarity: AchievementRarity,
+    ) -> Self {
         Self {
             id,
             name,
@@ -302,7 +310,10 @@ impl Achievement {
         if self.conditions.is_empty() {
             return 0.0;
         }
-        self.conditions.iter().map(|c| c.progress_percentage()).sum::<f32>()
+        self.conditions
+            .iter()
+            .map(|c| c.progress_percentage())
+            .sum::<f32>()
             / self.conditions.len() as f32
     }
 

@@ -1,3 +1,4 @@
+#![allow(clippy::module_inception)]
 //! 成就系统模块
 //!
 //! 管理游戏中的成就、里程碑和解锁奖励

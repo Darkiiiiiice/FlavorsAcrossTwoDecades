@@ -153,8 +153,7 @@ impl Travel {
         let now = Utc::now();
         self.status = TravelStatus::Completed;
         self.completed_at = Some(now);
-        self.actual_hours =
-            Some((now - self.started_at).num_hours().max(0) as u32);
+        self.actual_hours = Some((now - self.started_at).num_hours().max(0) as u32);
 
         Ok(self.rewards.clone())
     }
@@ -232,7 +231,7 @@ impl Travel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::travel::{DestinationCategory, DestinationManager};
+    use crate::game::travel::DestinationManager;
 
     fn create_test_destination() -> Destination {
         DestinationManager::default_destinations()

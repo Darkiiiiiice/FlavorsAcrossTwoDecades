@@ -1,8 +1,9 @@
+#![allow(clippy::module_inception)]
 //! 旅行收集系统模块
 
 mod destination;
-mod travel;
 mod reward;
+mod travel;
 
 pub use destination::{Destination, DestinationCategory, DestinationManager};
 pub use reward::{TravelPhoto, TravelReward, TravelRewardType};
@@ -58,7 +59,10 @@ impl TravelManager {
 
     /// 解锁目的地
     pub fn unlock_destination(&mut self, destination_id: &str) -> Result<(), String> {
-        if self.unlocked_destinations.contains(&destination_id.to_string()) {
+        if self
+            .unlocked_destinations
+            .contains(&destination_id.to_string())
+        {
             return Err("目的地已解锁".to_string());
         }
 
@@ -131,15 +135,15 @@ impl TravelManager {
             return Err("已有进行中的旅行".to_string());
         }
 
-        if let Some(last_travel) = self.travel_history.last() {
-            if let Some(completed_at) = last_travel.completed_at {
-                let elapsed = (Utc::now() - completed_at).num_hours() as u32;
-                if elapsed < condition.cooldown_hours {
-                    return Err(format!(
-                        "冷却中，还需等待 {} 小时",
-                        condition.cooldown_hours - elapsed
-                    ));
-                }
+        if let Some(last_travel) = self.travel_history.last()
+            && let Some(completed_at) = last_travel.completed_at
+        {
+            let elapsed = (Utc::now() - completed_at).num_hours() as u32;
+            if elapsed < condition.cooldown_hours {
+                return Err(format!(
+                    "冷却中，还需等待 {} 小时",
+                    condition.cooldown_hours - elapsed
+                ));
             }
         }
 
@@ -188,7 +192,11 @@ mod tests {
 
         let result = manager.unlock_destination("chengdu");
         assert!(result.is_ok());
-        assert!(manager.unlocked_destinations.contains(&"chengdu".to_string()));
+        assert!(
+            manager
+                .unlocked_destinations
+                .contains(&"chengdu".to_string())
+        );
     }
 
     #[test]

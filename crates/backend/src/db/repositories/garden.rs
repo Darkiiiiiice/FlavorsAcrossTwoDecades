@@ -41,7 +41,7 @@ impl GardenRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<GardenPlot>> {
         let row = sqlx::query_as::<_, GardenPlotRow>(
             r#"SELECT id, save_id, plot_number, is_unlocked, current_crop, fertility, moisture
-               FROM garden_plots WHERE id = ?"#
+               FROM garden_plots WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -58,16 +58,14 @@ impl GardenRepository {
     pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Vec<GardenPlot>> {
         let rows = sqlx::query_as::<_, GardenPlotRow>(
             r#"SELECT id, save_id, plot_number, is_unlocked, current_crop, fertility, moisture
-               FROM garden_plots WHERE save_id = ? ORDER BY plot_number ASC"#
+               FROM garden_plots WHERE save_id = ? ORDER BY plot_number ASC"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_plot())
-            .collect()
+        rows.into_iter().map(|row| row.into_plot()).collect()
     }
 
     /// 更新菜地状态
@@ -125,16 +123,12 @@ struct GardenPlotRow {
 
 impl GardenPlotRow {
     fn into_plot(self) -> GameResult<GardenPlot> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid save_id UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         Ok(GardenPlot {

@@ -2,20 +2,12 @@
 
 use chrono::Utc;
 use flavors_backend::db::models::{
-    command::Command,
-    customer::CustomerRecord,
-    dialogue::DialogueMessage,
-    memory::MemoryFragment,
-    panpan::PanpanState,
-    recipe::Recipe,
-    save::Save,
-    shop::ShopState,
-    travel::Travel,
+    command::Command, customer::CustomerRecord, dialogue::DialogueMessage, memory::MemoryFragment,
+    panpan::PanpanState, recipe::Recipe, save::Save, shop::ShopState, travel::Travel,
 };
 use flavors_backend::db::repositories::{
-    CommandRepository, CustomerRepository, DialogueRepository, GardenRepository,
-    MemoryRepository, PanpanRepository, RecipeRepository, SaveRepository,
-    ShopRepository, TravelRepository,
+    CommandRepository, CustomerRepository, DialogueRepository, GardenRepository, MemoryRepository,
+    PanpanRepository, RecipeRepository, SaveRepository, ShopRepository, TravelRepository,
 };
 use flavors_backend::game::recipe::{RecipeCategory, RecipeSource, RecipeStatus};
 use flavors_backend::game::travel::TravelStatus;
@@ -27,9 +19,10 @@ async fn setup_test_db() -> SqlitePool {
     let pool = SqlitePool::connect("sqlite::memory:")
         .await
         .expect("Failed to connect to test database");
-    
+
     // 运行迁移
-    sqlx::query(r#"
+    sqlx::query(
+        r#"
         CREATE TABLE IF NOT EXISTS saves (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -138,11 +131,12 @@ async fn setup_test_db() -> SqlitePool {
             status TEXT NOT NULL,
             rewards TEXT
         );
-    "#)
+    "#,
+    )
     .execute(&pool)
     .await
     .expect("Failed to run migrations");
-    
+
     pool
 }
 
@@ -157,20 +151,20 @@ fn create_test_save() -> Save {
 async fn test_save_repository() {
     let pool = setup_test_db().await;
     let repo = SaveRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
     repo.create(&save).await.expect("Failed to create save");
-    
+
     // 查找存档
     let found = repo.find_by_id(save.id).await.expect("Failed to find save");
     assert!(found.is_some());
     assert_eq!(found.unwrap().player_name, "测试玩家");
-    
+
     // 列出所有存档
     let all = repo.find_all().await.expect("Failed to list saves");
     assert_eq!(all.len(), 1);
-    
+
     // 删除存档
     repo.delete(save.id).await.expect("Failed to delete save");
     let found = repo.find_by_id(save.id).await.expect("Failed to find save");
@@ -184,22 +178,34 @@ async fn test_command_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let cmd_repo = CommandRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建指令
     let cmd = Command::new(save.id, "测试指令".to_string(), 60);
-    cmd_repo.create(&cmd).await.expect("Failed to create command");
-    
+    cmd_repo
+        .create(&cmd)
+        .await
+        .expect("Failed to create command");
+
     // 查找指令
-    let found = cmd_repo.find_by_id(cmd.id).await.expect("Failed to find command");
+    let found = cmd_repo
+        .find_by_id(cmd.id)
+        .await
+        .expect("Failed to find command");
     assert!(found.is_some());
     assert_eq!(found.unwrap().content, "测试指令");
-    
+
     // 按存档查找
-    let cmds = cmd_repo.find_by_save_id(save.id).await.expect("Failed to list commands");
+    let cmds = cmd_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to list commands");
     assert_eq!(cmds.len(), 1);
 }
 
@@ -210,17 +216,31 @@ async fn test_dialogue_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let dialogue_repo = DialogueRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建对话
-    let msg = DialogueMessage::new(save.id, "player".to_string(), "你好".to_string(), "chat".to_string());
-    dialogue_repo.create(&msg).await.expect("Failed to create dialogue");
-    
+    let msg = DialogueMessage::new(
+        save.id,
+        "player".to_string(),
+        "你好".to_string(),
+        "chat".to_string(),
+    );
+    dialogue_repo
+        .create(&msg)
+        .await
+        .expect("Failed to create dialogue");
+
     // 查找对话
-    let msgs = dialogue_repo.find_by_save_id(save.id).await.expect("Failed to list dialogues");
+    let msgs = dialogue_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to list dialogues");
     assert_eq!(msgs.len(), 1);
     assert_eq!(msgs[0].content, "你好");
 }
@@ -232,11 +252,14 @@ async fn test_recipe_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let recipe_repo = RecipeRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建菜谱
     let recipe = Recipe {
         id: Uuid::new_v4(),
@@ -248,16 +271,28 @@ async fn test_recipe_repository() {
         source: RecipeSource::Inherited,
         unlock_condition: Some("信任度达到50".to_string()),
     };
-    recipe_repo.create(&recipe).await.expect("Failed to create recipe");
-    
+    recipe_repo
+        .create(&recipe)
+        .await
+        .expect("Failed to create recipe");
+
     // 查找菜谱
-    let found = recipe_repo.find_by_id(recipe.id).await.expect("Failed to find recipe");
+    let found = recipe_repo
+        .find_by_id(recipe.id)
+        .await
+        .expect("Failed to find recipe");
     assert!(found.is_some());
     assert_eq!(found.unwrap().name, "宫保鸡丁");
-    
+
     // 更新状态
-    recipe_repo.update_status(recipe.id, RecipeStatus::Mastered).await.expect("Failed to update status");
-    let found = recipe_repo.find_by_id(recipe.id).await.expect("Failed to find recipe");
+    recipe_repo
+        .update_status(recipe.id, RecipeStatus::Mastered)
+        .await
+        .expect("Failed to update status");
+    let found = recipe_repo
+        .find_by_id(recipe.id)
+        .await
+        .expect("Failed to find recipe");
     assert_eq!(found.unwrap().status, RecipeStatus::Mastered);
 }
 
@@ -268,11 +303,14 @@ async fn test_customer_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let customer_repo = CustomerRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建顾客
     let customer = CustomerRecord {
         id: Uuid::new_v4(),
@@ -284,23 +322,41 @@ async fn test_customer_repository() {
         last_visit: Utc::now(),
         preferences: r#"["辣菜"]"#.to_string(),
     };
-    customer_repo.create(&customer).await.expect("Failed to create customer");
-    
+    customer_repo
+        .create(&customer)
+        .await
+        .expect("Failed to create customer");
+
     // 查找顾客
-    let found = customer_repo.find_by_id(customer.id).await.expect("Failed to find customer");
+    let found = customer_repo
+        .find_by_id(customer.id)
+        .await
+        .expect("Failed to find customer");
     assert!(found.is_some());
     assert_eq!(found.unwrap().name, "张三");
-    
+
     // 更新顾客
     let mut updated = customer.clone();
     updated.favorability = 80;
-    customer_repo.update(&updated).await.expect("Failed to update customer");
-    let found = customer_repo.find_by_id(customer.id).await.expect("Failed to find customer");
+    customer_repo
+        .update(&updated)
+        .await
+        .expect("Failed to update customer");
+    let found = customer_repo
+        .find_by_id(customer.id)
+        .await
+        .expect("Failed to find customer");
     assert_eq!(found.unwrap().favorability, 80);
-    
+
     // 删除顾客
-    customer_repo.delete(customer.id).await.expect("Failed to delete customer");
-    let found = customer_repo.find_by_id(customer.id).await.expect("Failed to find customer");
+    customer_repo
+        .delete(customer.id)
+        .await
+        .expect("Failed to delete customer");
+    let found = customer_repo
+        .find_by_id(customer.id)
+        .await
+        .expect("Failed to find customer");
     assert!(found.is_none());
 }
 
@@ -311,11 +367,14 @@ async fn test_memory_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let memory_repo = MemoryRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建记忆碎片
     let fragment = MemoryFragment {
         id: Uuid::new_v4(),
@@ -327,21 +386,33 @@ async fn test_memory_repository() {
         unlocked_at: None,
         trigger_condition: "品尝红烧肉".to_string(),
     };
-    memory_repo.create(&fragment).await.expect("Failed to create memory");
-    
+    memory_repo
+        .create(&fragment)
+        .await
+        .expect("Failed to create memory");
+
     // 查找记忆
-    let found = memory_repo.find_by_id(fragment.id).await.expect("Failed to find memory");
+    let found = memory_repo
+        .find_by_id(fragment.id)
+        .await
+        .expect("Failed to find memory");
     assert!(found.is_some());
     assert_eq!(found.unwrap().title, "童年的味道");
-    
+
     // 解锁记忆
     let mut updated = fragment.clone();
     updated.is_unlocked = true;
     updated.unlocked_at = Some(Utc::now());
-    memory_repo.update(&updated).await.expect("Failed to update memory");
-    
+    memory_repo
+        .update(&updated)
+        .await
+        .expect("Failed to update memory");
+
     // 查找已解锁的记忆
-    let unlocked = memory_repo.find_unlocked(save.id).await.expect("Failed to find unlocked memories");
+    let unlocked = memory_repo
+        .find_unlocked(save.id)
+        .await
+        .expect("Failed to find unlocked memories");
     assert_eq!(unlocked.len(), 1);
 }
 
@@ -352,25 +423,40 @@ async fn test_panpan_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let panpan_repo = PanpanRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建盼盼状态
     let panpan = PanpanState::new(save.id);
-    panpan_repo.create(&panpan).await.expect("Failed to create panpan state");
-    
+    panpan_repo
+        .create(&panpan)
+        .await
+        .expect("Failed to create panpan state");
+
     // 查找盼盼状态
-    let found = panpan_repo.find_by_save_id(save.id).await.expect("Failed to find panpan state");
+    let found = panpan_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to find panpan state");
     assert!(found.is_some());
     assert_eq!(found.unwrap().name, "盼盼");
-    
+
     // 更新盼盼状态
     let mut updated = panpan.clone();
     updated.trust_level = 80;
-    panpan_repo.update(&updated).await.expect("Failed to update panpan state");
-    let found = panpan_repo.find_by_save_id(save.id).await.expect("Failed to find panpan state");
+    panpan_repo
+        .update(&updated)
+        .await
+        .expect("Failed to update panpan state");
+    let found = panpan_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to find panpan state");
     assert_eq!(found.unwrap().trust_level, 80);
 }
 
@@ -381,25 +467,37 @@ async fn test_garden_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let garden_repo = GardenRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 初始化菜园
-    let plots = garden_repo.initialize_plots(save.id).await.expect("Failed to initialize plots");
+    let plots = garden_repo
+        .initialize_plots(save.id)
+        .await
+        .expect("Failed to initialize plots");
     assert_eq!(plots.len(), 6);
-    
+
     // 验证第一块地已解锁
     let first_plot = plots.iter().find(|p| p.plot_number == 1).unwrap();
     assert!(first_plot.is_unlocked);
-    
+
     // 更新地块状态
     let mut plot = first_plot.clone();
     plot.current_crop = Some(r#"{"type":"tomato"}"#.to_string());
-    garden_repo.update(&plot).await.expect("Failed to update plot");
-    
-    let found = garden_repo.find_by_id(plot.id).await.expect("Failed to find plot");
+    garden_repo
+        .update(&plot)
+        .await
+        .expect("Failed to update plot");
+
+    let found = garden_repo
+        .find_by_id(plot.id)
+        .await
+        .expect("Failed to find plot");
     assert!(found.unwrap().current_crop.is_some());
 }
 
@@ -410,25 +508,40 @@ async fn test_shop_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let shop_repo = ShopRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建小馆状态
     let shop = ShopState::new(save.id);
-    shop_repo.create(&shop).await.expect("Failed to create shop state");
-    
+    shop_repo
+        .create(&shop)
+        .await
+        .expect("Failed to create shop state");
+
     // 查找小馆状态
-    let found = shop_repo.find_by_save_id(save.id).await.expect("Failed to find shop state");
+    let found = shop_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to find shop state");
     assert!(found.is_some());
     assert_eq!(found.unwrap().name, "星夜小馆");
-    
+
     // 更新资金
     let mut updated = shop.clone();
     updated.funds = 20000;
-    shop_repo.update(&updated).await.expect("Failed to update shop state");
-    let found = shop_repo.find_by_save_id(save.id).await.expect("Failed to find shop state");
+    shop_repo
+        .update(&updated)
+        .await
+        .expect("Failed to update shop state");
+    let found = shop_repo
+        .find_by_save_id(save.id)
+        .await
+        .expect("Failed to find shop state");
     assert_eq!(found.unwrap().funds, 20000);
 }
 
@@ -439,26 +552,41 @@ async fn test_travel_repository() {
     let pool = setup_test_db().await;
     let save_repo = SaveRepository::new(pool.clone());
     let travel_repo = TravelRepository::new(pool);
-    
+
     // 创建存档
     let save = create_test_save();
-    save_repo.create(&save).await.expect("Failed to create save");
-    
+    save_repo
+        .create(&save)
+        .await
+        .expect("Failed to create save");
+
     // 创建旅行
     let travel = Travel::new(save.id, "四川成都".to_string(), 7);
-    travel_repo.create(&travel).await.expect("Failed to create travel");
-    
+    travel_repo
+        .create(&travel)
+        .await
+        .expect("Failed to create travel");
+
     // 查找旅行
-    let found = travel_repo.find_by_id(travel.id).await.expect("Failed to find travel");
+    let found = travel_repo
+        .find_by_id(travel.id)
+        .await
+        .expect("Failed to find travel");
     assert!(found.is_some());
     assert_eq!(found.unwrap().destination, "四川成都");
-    
+
     // 完成旅行
     let mut completed = travel.clone();
     completed.status = TravelStatus::Completed;
     completed.rewards = Some(r#"[{"type":"recipe","name":"麻婆豆腐"}]"#.to_string());
-    travel_repo.update(&completed).await.expect("Failed to update travel");
-    
-    let found = travel_repo.find_by_id(travel.id).await.expect("Failed to find travel");
+    travel_repo
+        .update(&completed)
+        .await
+        .expect("Failed to update travel");
+
+    let found = travel_repo
+        .find_by_id(travel.id)
+        .await
+        .expect("Failed to find travel");
     assert_eq!(found.unwrap().status, TravelStatus::Completed);
 }

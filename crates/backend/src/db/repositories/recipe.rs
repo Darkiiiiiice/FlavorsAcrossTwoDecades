@@ -42,7 +42,7 @@ impl RecipeRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<Recipe>> {
         let row = sqlx::query_as::<_, RecipeRow>(
             r#"SELECT id, save_id, name, category, status, ingredients, source, unlock_condition
-               FROM recipes WHERE id = ?"#
+               FROM recipes WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -59,28 +59,24 @@ impl RecipeRepository {
     pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Vec<Recipe>> {
         let rows = sqlx::query_as::<_, RecipeRow>(
             r#"SELECT id, save_id, name, category, status, ingredients, source, unlock_condition
-               FROM recipes WHERE save_id = ?"#
+               FROM recipes WHERE save_id = ?"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_recipe())
-            .collect()
+        rows.into_iter().map(|row| row.into_recipe()).collect()
     }
 
     /// 更新菜谱状态
     pub async fn update_status(&self, id: Uuid, status: RecipeStatus) -> GameResult<()> {
-        sqlx::query(
-            r#"UPDATE recipes SET status = ? WHERE id = ?"#
-        )
-        .bind(status_to_string(&status))
-        .bind(id.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
+        sqlx::query(r#"UPDATE recipes SET status = ? WHERE id = ?"#)
+            .bind(status_to_string(&status))
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
 
         Ok(())
     }
@@ -175,12 +171,12 @@ struct RecipeRow {
 
 impl RecipeRow {
     fn into_recipe(self) -> GameResult<Recipe> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid UUID: {}", e) }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation { details: format!("Invalid save_id UUID: {}", e) }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let category = string_to_category(&self.category)?;

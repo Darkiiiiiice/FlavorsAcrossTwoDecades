@@ -219,10 +219,10 @@ impl GardenPlot {
 
     /// 获取产量
     pub fn get_yield(&self) -> u32 {
-        if let Some(crop) = &self.crop {
-            if crop.can_harvest() {
-                return crop.calculate_yield();
-            }
+        if let Some(crop) = &self.crop
+            && crop.can_harvest()
+        {
+            return crop.calculate_yield();
         }
         0
     }

@@ -11,7 +11,7 @@ use crate::error::{GameError, Result};
 use crate::game::customer::{
     Customer, CustomerType, DietaryRestriction, FlavorPreference, Preference,
 };
-use crate::game::llm::{create_llm_manager, LlmManager};
+use crate::game::llm::{LlmManager, create_llm_manager};
 
 /// AI 生成的顾客数据
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,8 +231,14 @@ mod tests {
         let config = create_test_config();
         let generator = AICustomerGenerator::new(config).unwrap();
 
-        assert_eq!(generator.parse_customer_type("普通顾客"), CustomerType::Normal);
-        assert_eq!(generator.parse_customer_type("美食家"), CustomerType::Foodie);
+        assert_eq!(
+            generator.parse_customer_type("普通顾客"),
+            CustomerType::Normal
+        );
+        assert_eq!(
+            generator.parse_customer_type("美食家"),
+            CustomerType::Foodie
+        );
         assert_eq!(generator.parse_customer_type("VIP"), CustomerType::VIP);
     }
 

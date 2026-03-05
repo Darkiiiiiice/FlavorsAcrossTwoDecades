@@ -1,12 +1,6 @@
 -- 002_phase4_schema.sql
 -- Phase 4: 细粒度数据模型 Schema
 
--- ========== 存档表（更新） ==========
--- 添加 player_name, play_time_seconds, chapter 字段
-ALTER TABLE saves ADD COLUMN player_name TEXT;
-ALTER TABLE saves ADD COLUMN play_time_seconds INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE saves ADD COLUMN chapter INTEGER NOT NULL DEFAULT 1;
-
 -- ========== 盼盼状态表 ==========
 CREATE TABLE IF NOT EXISTS panpan_states (
     save_id TEXT PRIMARY KEY,

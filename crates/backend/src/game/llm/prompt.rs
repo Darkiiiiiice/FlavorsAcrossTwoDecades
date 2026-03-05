@@ -53,10 +53,7 @@ impl PromptTemplates {
 
         // 每日简报模板
         engine
-            .register_template_string(
-                "daily_report",
-                include_str!("templates/daily_report.hbs"),
-            )
+            .register_template_string("daily_report", include_str!("templates/daily_report.hbs"))
             .map_err(|e| GameError::LlmError(format!("Failed to register template: {}", e)))?;
 
         Ok(())

@@ -126,7 +126,12 @@ pub struct IngredientAmount {
 
 impl IngredientAmount {
     /// 创建精确用量
-    pub fn exact(ingredient_id: String, ingredient_name: String, amount: f32, unit: String) -> Self {
+    pub fn exact(
+        ingredient_id: String,
+        ingredient_name: String,
+        amount: f32,
+        unit: String,
+    ) -> Self {
         Self {
             ingredient_id,
             ingredient_name,
@@ -289,12 +294,12 @@ impl Recipe {
         }
         // 将模糊用量转为精确用量
         for ingredient in &mut self.ingredients {
-            if ingredient.exact_amount.is_none() {
-                if let (Some(min), Some(max)) = (ingredient.min_amount, ingredient.max_amount) {
-                    ingredient.exact_amount = Some((min + max) / 2.0);
-                    ingredient.min_amount = None;
-                    ingredient.max_amount = None;
-                }
+            if ingredient.exact_amount.is_none()
+                && let (Some(min), Some(max)) = (ingredient.min_amount, ingredient.max_amount)
+            {
+                ingredient.exact_amount = Some((min + max) / 2.0);
+                ingredient.min_amount = None;
+                ingredient.max_amount = None;
             }
         }
         self.status = RecipeStatus::Precise;

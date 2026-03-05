@@ -156,11 +156,8 @@ mod tests {
         let mut dispatcher = EventDispatcher::new();
         let save_id = Uuid::new_v4();
 
-        let event = GameEvent::immediate(
-            save_id,
-            GameEventType::DailyReport,
-            serde_json::json!({}),
-        );
+        let event =
+            GameEvent::immediate(save_id, GameEventType::DailyReport, serde_json::json!({}));
 
         dispatcher.schedule(event);
         assert_eq!(dispatcher.len(), 1);

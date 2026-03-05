@@ -120,7 +120,10 @@ impl Interaction {
             id: Uuid::new_v4(),
             neighbor_id,
             interaction_type,
-            result: InteractionResult::success("互动成功".to_string(), interaction_type.base_affinity_change()),
+            result: InteractionResult::success(
+                "互动成功".to_string(),
+                interaction_type.base_affinity_change(),
+            ),
             timestamp: Utc::now(),
             items: Vec::new(),
             dialogue: None,
@@ -173,11 +176,11 @@ impl InteractionManager {
     /// 创建默认限制
     fn create_default_limits() -> std::collections::HashMap<String, u32> {
         let mut limits = std::collections::HashMap::new();
-        limits.insert("gift".to_string(), 3);       // 每天最多送3次礼物
+        limits.insert("gift".to_string(), 3); // 每天最多送3次礼物
         limits.insert("request_help".to_string(), 2); // 每天最多请求2次帮助
-        limits.insert("chat".to_string(), 5);       // 每天最多闲聊5次
-        limits.insert("trade".to_string(), 3);      // 每天最多交易3次
-        limits.insert("consult".to_string(), 3);    // 每天最多请教3次
+        limits.insert("chat".to_string(), 5); // 每天最多闲聊5次
+        limits.insert("trade".to_string(), 3); // 每天最多交易3次
+        limits.insert("consult".to_string(), 3); // 每天最多请教3次
         limits
     }
 
@@ -219,7 +222,8 @@ impl InteractionManager {
 
     /// 获取与某邻居的互动历史
     pub fn get_history_with(&self, neighbor_id: &str) -> Vec<&Interaction> {
-        self.history.iter()
+        self.history
+            .iter()
             .filter(|i| i.neighbor_id == neighbor_id)
             .collect()
     }
@@ -241,7 +245,11 @@ pub struct GiftEffect;
 
 impl GiftEffect {
     /// 计算礼物好感度加成
-    pub fn calculate_affinity(gift: &str, favorite_gifts: &[String], disliked_items: &[String]) -> i32 {
+    pub fn calculate_affinity(
+        gift: &str,
+        favorite_gifts: &[String],
+        disliked_items: &[String],
+    ) -> i32 {
         if favorite_gifts.iter().any(|f| gift.contains(f)) {
             10 // 喜欢的礼物 +10
         } else if disliked_items.iter().any(|d| gift.contains(d)) {
@@ -309,12 +317,21 @@ mod tests {
         let disliked = vec!["快餐".to_string()];
 
         // 喜欢的礼物
-        assert_eq!(GiftEffect::calculate_affinity("玫瑰花种", &favorite, &disliked), 10);
+        assert_eq!(
+            GiftEffect::calculate_affinity("玫瑰花种", &favorite, &disliked),
+            10
+        );
 
         // 讨厌的礼物
-        assert_eq!(GiftEffect::calculate_affinity("快餐外卖", &favorite, &disliked), -5);
+        assert_eq!(
+            GiftEffect::calculate_affinity("快餐外卖", &favorite, &disliked),
+            -5
+        );
 
         // 普通礼物
-        assert_eq!(GiftEffect::calculate_affinity("水果", &favorite, &disliked), 3);
+        assert_eq!(
+            GiftEffect::calculate_affinity("水果", &favorite, &disliked),
+            3
+        );
     }
 }

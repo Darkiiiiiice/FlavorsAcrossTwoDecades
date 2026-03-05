@@ -248,7 +248,12 @@ impl Crop {
             CropType::Alien,
             5,
             Rarity::Legendary,
-            vec![Season::Spring, Season::Summer, Season::Autumn, Season::Winter],
+            vec![
+                Season::Spring,
+                Season::Summer,
+                Season::Autumn,
+                Season::Winter,
+            ],
             168, // 168小时 = 7天
         )
     }
@@ -272,7 +277,8 @@ impl Crop {
 
         // 增加生长进度
         let progress_per_hour = 100.0 / self.growth_time as f32;
-        self.growth_progress = ((self.growth_progress as f32 + progress_per_hour * hours as f32 * speed)
+        self.growth_progress = ((self.growth_progress as f32
+            + progress_per_hour * hours as f32 * speed)
             .min(100.0)) as u32;
 
         // 更新生长阶段

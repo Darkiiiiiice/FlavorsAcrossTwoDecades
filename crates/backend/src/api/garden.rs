@@ -86,19 +86,14 @@ pub async fn list_plots(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<PlotListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = GardenRepository::new(state.db_pool.pool().clone());
     let plots = repo.find_by_save_id(save_id).await?;
 
-    let plot_responses: Vec<PlotResponse> = plots
-        .into_iter()
-        .map(PlotResponse::from)
-        .collect();
+    let plot_responses: Vec<PlotResponse> = plots.into_iter().map(PlotResponse::from).collect();
 
     Ok(Json(PlotListResponse {
         total: plot_responses.len(),
@@ -124,19 +119,18 @@ pub async fn get_plot(
     State(state): State<Arc<AppState>>,
     Path((_save_id, plot_id)): Path<(String, String)>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid plot_id UUID: {}", e),
-        }
+    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid plot_id UUID: {}", e),
     })?;
 
     let repo = GardenRepository::new(state.db_pool.pool().clone());
-    let plot = repo.find_by_id(plot_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let plot = repo
+        .find_by_id(plot_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
             entity_id: plot_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(PlotResponse::from(plot)))
 }
@@ -161,19 +155,18 @@ pub async fn plant_crop(
     Path((_save_id, plot_id)): Path<(String, String)>,
     Json(payload): Json<PlantRequest>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid plot_id UUID: {}", e),
-        }
+    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid plot_id UUID: {}", e),
     })?;
 
     let repo = GardenRepository::new(state.db_pool.pool().clone());
-    let mut plot = repo.find_by_id(plot_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut plot = repo
+        .find_by_id(plot_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
             entity_id: plot_id.to_string(),
-        }
-    })?;
+        })?;
 
     if !plot.is_unlocked {
         return Err(GameError::Validation {
@@ -191,7 +184,8 @@ pub async fn plant_crop(
     let crop_info = serde_json::json!({
         "type": payload.crop_type,
         "planted_at": chrono::Utc::now().to_rfc3339()
-    }).to_string();
+    })
+    .to_string();
     plot.current_crop = Some(crop_info);
 
     repo.update(&plot).await?;
@@ -219,19 +213,18 @@ pub async fn water_plot(
     Path((_save_id, plot_id)): Path<(String, String)>,
     Json(payload): Json<WaterRequest>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid plot_id UUID: {}", e),
-        }
+    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid plot_id UUID: {}", e),
     })?;
 
     let repo = GardenRepository::new(state.db_pool.pool().clone());
-    let mut plot = repo.find_by_id(plot_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut plot = repo
+        .find_by_id(plot_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
             entity_id: plot_id.to_string(),
-        }
-    })?;
+        })?;
 
     plot.moisture = (plot.moisture + payload.water_amount).min(100);
     repo.update(&plot).await?;
@@ -257,19 +250,18 @@ pub async fn harvest_crop(
     State(state): State<Arc<AppState>>,
     Path((_save_id, plot_id)): Path<(String, String)>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid plot_id UUID: {}", e),
-        }
+    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid plot_id UUID: {}", e),
     })?;
 
     let repo = GardenRepository::new(state.db_pool.pool().clone());
-    let mut plot = repo.find_by_id(plot_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut plot = repo
+        .find_by_id(plot_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
             entity_id: plot_id.to_string(),
-        }
-    })?;
+        })?;
 
     if plot.current_crop.is_none() {
         return Err(GameError::Validation {

@@ -294,7 +294,7 @@ impl Experiment {
 
             // 传感器测量值（带有误差）
             let measurement_error = rng.random_range(-error_range..=error_range) as f32;
-            let measured_value = true_value * (1.0 + measurement_error);
+            let _measured_value = true_value * (1.0 + measurement_error);
 
             // 根据测量值判断反馈
             let feedback_type = if measurement_error.abs() < 0.05 {
@@ -365,7 +365,9 @@ impl Experiment {
         self.status = ExperimentStatus::Completed;
         self.completed_at = Some(Utc::now());
 
-        self.result.clone().ok_or_else(|| "没有实验结果".to_string())
+        self.result
+            .clone()
+            .ok_or_else(|| "没有实验结果".to_string())
     }
 
     /// 获取剩余尝试次数
@@ -513,7 +515,10 @@ mod tests {
             let adjust_result = experiment.adjust_amounts(&adjustments);
             // 可能成功或失败，取决于随机结果
             if adjust_result.is_ok() {
-                assert_eq!(experiment.current_amounts[0].attempted_amount, initial + 0.5);
+                assert_eq!(
+                    experiment.current_amounts[0].attempted_amount,
+                    initial + 0.5
+                );
             }
         }
     }

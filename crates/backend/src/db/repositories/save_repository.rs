@@ -1,8 +1,8 @@
 //! 存档仓储
 
+use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 use crate::db::models::save::Save;
 use crate::error::{DatabaseError, GameError, GameResult};
@@ -42,7 +42,7 @@ impl SaveRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<Save>> {
         let row = sqlx::query_as::<_, SaveRow>(
             r#"SELECT id, name, player_name, created_at, updated_at, play_time_seconds, chapter
-               FROM saves WHERE id = ?"#
+               FROM saves WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -59,22 +59,20 @@ impl SaveRepository {
     pub async fn find_all(&self) -> GameResult<Vec<Save>> {
         let rows = sqlx::query_as::<_, SaveRow>(
             r#"SELECT id, name, player_name, created_at, updated_at, play_time_seconds, chapter
-               FROM saves ORDER BY updated_at DESC"#
+               FROM saves ORDER BY updated_at DESC"#,
         )
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_save())
-            .collect()
+        rows.into_iter().map(|row| row.into_save()).collect()
     }
 
     /// 更新存档
     pub async fn update(&self, save: &Save) -> GameResult<()> {
         sqlx::query(
             r#"UPDATE saves SET name = ?, player_name = ?, updated_at = ?,
-               play_time_seconds = ?, chapter = ? WHERE id = ?"#
+               play_time_seconds = ?, chapter = ? WHERE id = ?"#,
         )
         .bind(&save.name)
         .bind(&save.player_name)
@@ -116,10 +114,8 @@ struct SaveRow {
 impl SaveRow {
     /// 将数据库行转换为 Save 模型
     fn into_save(self) -> GameResult<Save> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
         let created_at = DateTime::parse_from_rfc3339(&self.created_at)

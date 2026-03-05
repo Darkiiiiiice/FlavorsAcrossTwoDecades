@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::db::models::panpan::{ModuleRecord, PanpanState};
 use crate::error::{DatabaseError, GameError, GameResult};
-use crate::game::panpan::{Emotion, Module, ModuleType, Personality};
+use crate::game::panpan::{Emotion, Personality};
 
 /// 盼盼状态仓储
 pub struct PanpanRepository {
@@ -21,11 +21,10 @@ impl PanpanRepository {
 
     /// 创建盼盼状态
     pub async fn create(&self, state: &PanpanState) -> GameResult<()> {
-        let personality_json = serde_json::to_string(&state.personality).map_err(|e| {
-            GameError::Validation {
+        let personality_json =
+            serde_json::to_string(&state.personality).map_err(|e| GameError::Validation {
                 details: format!("Failed to serialize personality: {}", e),
-            }
-        })?;
+            })?;
 
         sqlx::query(
             r#"INSERT INTO panpan_states (save_id, name, model, manufacture_date, personality,
@@ -56,7 +55,7 @@ impl PanpanRepository {
         let row = sqlx::query_as::<_, PanpanStateRow>(
             r#"SELECT save_id, name, model, manufacture_date, personality, trust_level,
                emotion, energy_current, energy_max, location, current_state, current_task
-               FROM panpan_states WHERE save_id = ?"#
+               FROM panpan_states WHERE save_id = ?"#,
         )
         .bind(save_id.to_string())
         .fetch_optional(&self.pool)
@@ -71,17 +70,16 @@ impl PanpanRepository {
 
     /// 更新盼盼状态
     pub async fn update(&self, state: &PanpanState) -> GameResult<()> {
-        let personality_json = serde_json::to_string(&state.personality).map_err(|e| {
-            GameError::Validation {
+        let personality_json =
+            serde_json::to_string(&state.personality).map_err(|e| GameError::Validation {
                 details: format!("Failed to serialize personality: {}", e),
-            }
-        })?;
+            })?;
 
         sqlx::query(
             r#"UPDATE panpan_states SET name = ?, model = ?, manufacture_date = ?,
                personality = ?, trust_level = ?, emotion = ?, energy_current = ?,
                energy_max = ?, location = ?, current_state = ?, current_task = ?
-               WHERE save_id = ?"#
+               WHERE save_id = ?"#,
         )
         .bind(&state.name)
         .bind(&state.model)
@@ -138,7 +136,7 @@ impl PanpanRepository {
     pub async fn find_modules(&self, save_id: Uuid) -> GameResult<Vec<ModuleRecord>> {
         let rows = sqlx::query_as::<_, ModuleRow>(
             r#"SELECT id, save_id, module_type, level, condition, experience, is_functional
-               FROM modules WHERE save_id = ?"#
+               FROM modules WHERE save_id = ?"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
@@ -154,7 +152,7 @@ impl PanpanRepository {
     pub async fn update_module(&self, module: &ModuleRecord) -> GameResult<()> {
         sqlx::query(
             r#"UPDATE modules SET level = ?, condition = ?, experience = ?, is_functional = ?
-               WHERE id = ?"#
+               WHERE id = ?"#,
         )
         .bind(module.level as i64)
         .bind(module.condition as i64)
@@ -219,10 +217,8 @@ struct PanpanStateRow {
 
 impl PanpanStateRow {
     fn into_state(self) -> GameResult<PanpanState> {
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
         let manufacture_date = DateTime::parse_from_rfc3339(&self.manufacture_date)
@@ -231,11 +227,10 @@ impl PanpanStateRow {
             })?
             .with_timezone(&Utc);
 
-        let personality: Personality = serde_json::from_str(&self.personality).map_err(|e| {
-            GameError::Validation {
+        let personality: Personality =
+            serde_json::from_str(&self.personality).map_err(|e| GameError::Validation {
                 details: format!("Invalid personality JSON: {}", e),
-            }
-        })?;
+            })?;
 
         let emotion = string_to_emotion(&self.emotion)?;
 
@@ -270,16 +265,12 @@ struct ModuleRow {
 
 impl ModuleRow {
     fn into_module_record(self) -> GameResult<ModuleRecord> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid save_id UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         Ok(ModuleRecord {

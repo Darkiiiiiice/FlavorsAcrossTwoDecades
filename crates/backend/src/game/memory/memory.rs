@@ -140,7 +140,8 @@ impl MemoryContent {
 
     /// 添加感官记忆（便捷方法）
     pub fn with_sensory(mut self, sense: Sense, description: String) -> Self {
-        self.sensory_memories.push(SensoryMemory::new(sense, description));
+        self.sensory_memories
+            .push(SensoryMemory::new(sense, description));
         self
     }
 
@@ -194,7 +195,11 @@ impl MemoryContent {
         if !self.sensory_memories.is_empty() {
             result.push_str("【记忆中的感觉】\n");
             for memory in &self.sensory_memories {
-                result.push_str(&format!("{}: {}\n", memory.sense.icon(), memory.description));
+                result.push_str(&format!(
+                    "{}: {}\n",
+                    memory.sense.icon(),
+                    memory.description
+                ));
             }
             result.push('\n');
         }

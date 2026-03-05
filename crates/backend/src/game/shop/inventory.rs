@@ -201,12 +201,7 @@ mod tests {
 
     #[test]
     fn test_inventory_item() {
-        let mut item = InventoryItem::new(
-            "tomato".to_string(),
-            "番茄".to_string(),
-            10,
-            5,
-        );
+        let mut item = InventoryItem::new("tomato".to_string(), "番茄".to_string(), 10, 5);
 
         assert_eq!(item.quantity, 10);
         item.add(5);
@@ -219,12 +214,7 @@ mod tests {
     fn test_inventory_add() {
         let mut inventory = Inventory::new();
 
-        let item = InventoryItem::new(
-            "tomato".to_string(),
-            "番茄".to_string(),
-            10,
-            5,
-        );
+        let item = InventoryItem::new("tomato".to_string(), "番茄".to_string(), 10, 5);
 
         assert!(inventory.add_item(item).is_ok());
         assert_eq!(inventory.current_capacity, 10);
@@ -234,12 +224,7 @@ mod tests {
     fn test_inventory_remove() {
         let mut inventory = Inventory::new();
 
-        let item = InventoryItem::new(
-            "tomato".to_string(),
-            "番茄".to_string(),
-            10,
-            5,
-        );
+        let item = InventoryItem::new("tomato".to_string(), "番茄".to_string(), 10, 5);
         inventory.add_item(item).unwrap();
 
         assert!(inventory.remove_item("tomato", 5).is_ok());
@@ -252,20 +237,10 @@ mod tests {
         let mut inventory = Inventory::new();
         inventory.max_capacity = 20;
 
-        let item1 = InventoryItem::new(
-            "tomato".to_string(),
-            "番茄".to_string(),
-            15,
-            5,
-        );
+        let item1 = InventoryItem::new("tomato".to_string(), "番茄".to_string(), 15, 5);
         assert!(inventory.add_item(item1).is_ok());
 
-        let item2 = InventoryItem::new(
-            "potato".to_string(),
-            "土豆".to_string(),
-            10,
-            3,
-        );
+        let item2 = InventoryItem::new("potato".to_string(), "土豆".to_string(), 10, 3);
         assert!(inventory.add_item(item2).is_err()); // 超过容量
     }
 
@@ -273,12 +248,7 @@ mod tests {
     fn test_expired_items() {
         let mut inventory = Inventory::new();
 
-        let mut expired_item = InventoryItem::new(
-            "tomato".to_string(),
-            "番茄".to_string(),
-            10,
-            5,
-        );
+        let mut expired_item = InventoryItem::new("tomato".to_string(), "番茄".to_string(), 10, 5);
         expired_item.freshness = 0.0;
 
         inventory.add_item(expired_item).unwrap();

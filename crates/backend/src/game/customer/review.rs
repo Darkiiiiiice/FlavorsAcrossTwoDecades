@@ -76,12 +76,9 @@ impl Review {
 
         // 随机生成各维度评分（与总评分相关）
         let base_rating = rating as i32;
-        let dish_rating = (base_rating + (rand::random::<i32>() % 2 - 1))
-            .clamp(1, 5) as u32;
-        let service_rating = (base_rating + (rand::random::<i32>() % 2 - 1))
-            .clamp(1, 5) as u32;
-        let environment_rating = (base_rating + (rand::random::<i32>() % 2 - 1))
-            .clamp(1, 5) as u32;
+        let dish_rating = (base_rating + (rand::random::<i32>() % 2 - 1)).clamp(1, 5) as u32;
+        let service_rating = (base_rating + (rand::random::<i32>() % 2 - 1)).clamp(1, 5) as u32;
+        let environment_rating = (base_rating + (rand::random::<i32>() % 2 - 1)).clamp(1, 5) as u32;
 
         Self {
             id: Uuid::new_v4(),
@@ -137,13 +134,7 @@ mod tests {
         let save_id = Uuid::new_v4();
         let order_id = Uuid::new_v4();
 
-        let review = Review::new(
-            customer_id,
-            save_id,
-            order_id,
-            5,
-            "非常好吃！".to_string(),
-        );
+        let review = Review::new(customer_id, save_id, order_id, 5, "非常好吃！".to_string());
 
         assert_eq!(review.rating, 5);
         assert_eq!(review.sentiment, ReviewSentiment::Positive);
@@ -152,18 +143,9 @@ mod tests {
 
     #[test]
     fn test_review_sentiment() {
-        assert_eq!(
-            ReviewSentiment::from_rating(1),
-            ReviewSentiment::Negative
-        );
-        assert_eq!(
-            ReviewSentiment::from_rating(3),
-            ReviewSentiment::Neutral
-        );
-        assert_eq!(
-            ReviewSentiment::from_rating(5),
-            ReviewSentiment::Positive
-        );
+        assert_eq!(ReviewSentiment::from_rating(1), ReviewSentiment::Negative);
+        assert_eq!(ReviewSentiment::from_rating(3), ReviewSentiment::Neutral);
+        assert_eq!(ReviewSentiment::from_rating(5), ReviewSentiment::Positive);
     }
 
     #[test]
@@ -184,13 +166,7 @@ mod tests {
         let save_id = Uuid::new_v4();
         let order_id = Uuid::new_v4();
 
-        let mut review = Review::new(
-            customer_id,
-            save_id,
-            order_id,
-            5,
-            "测试".to_string(),
-        );
+        let mut review = Review::new(customer_id, save_id, order_id, 5, "测试".to_string());
 
         review.dish_rating = 5;
         review.service_rating = 4;

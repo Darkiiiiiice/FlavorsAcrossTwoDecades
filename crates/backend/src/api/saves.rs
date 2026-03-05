@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-use crate::db::models::save::{Save, CreateSaveRequest as ModelCreateSaveRequest};
+use crate::db::models::save::Save;
 use crate::db::repositories::save_repository::SaveRepository;
 use crate::error::{GameError, GameResult};
 use crate::game::AppState;
@@ -146,18 +146,17 @@ pub async fn get_save(
 ) -> GameResult<Json<SaveInfo>> {
     let repo = SaveRepository::new(state.db_pool.pool().clone());
 
-    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
-    let save = repo.find_by_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let save = repo
+        .find_by_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Save".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(SaveInfo::from(save)))
 }
@@ -181,10 +180,8 @@ pub async fn delete_save(
 ) -> GameResult<StatusCode> {
     let repo = SaveRepository::new(state.db_pool.pool().clone());
 
-    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     // 先检查存档是否存在

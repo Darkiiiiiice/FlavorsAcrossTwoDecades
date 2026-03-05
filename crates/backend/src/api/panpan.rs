@@ -58,7 +58,8 @@ pub struct PanpanResponse {
 
 impl PanpanResponse {
     fn from_state(state: PanpanState) -> Self {
-        let personality_json = serde_json::to_string(&state.personality).unwrap_or_else(|_| "{}".to_string());
+        let personality_json =
+            serde_json::to_string(&state.personality).unwrap_or_else(|_| "{}".to_string());
         Self {
             save_id: state.save_id.to_string(),
             name: state.name,
@@ -93,19 +94,18 @@ pub async fn get_panpan(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<PanpanResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let panpan = repo.find_by_save_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let panpan = repo
+        .find_by_save_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "PanpanState".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(PanpanResponse::from_state(panpan)))
 }
@@ -129,19 +129,18 @@ pub async fn update_panpan(
     Path(save_id): Path<String>,
     Json(payload): Json<UpdatePanpanRequest>,
 ) -> GameResult<Json<PanpanResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let mut panpan = repo.find_by_save_id(save_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut panpan = repo
+        .find_by_save_id(save_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "PanpanState".to_string(),
             entity_id: save_id.to_string(),
-        }
-    })?;
+        })?;
 
     if let Some(trust_level) = payload.trust_level {
         panpan.trust_level = trust_level;

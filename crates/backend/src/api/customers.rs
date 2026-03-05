@@ -86,19 +86,15 @@ pub async fn list_customers(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<CustomerListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        }
+    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid UUID: {}", e),
     })?;
 
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
     let customers = repo.find_by_save_id(save_id).await?;
 
-    let customer_responses: Vec<CustomerResponse> = customers
-        .into_iter()
-        .map(CustomerResponse::from)
-        .collect();
+    let customer_responses: Vec<CustomerResponse> =
+        customers.into_iter().map(CustomerResponse::from).collect();
 
     Ok(Json(CustomerListResponse {
         total: customer_responses.len(),
@@ -124,19 +120,18 @@ pub async fn get_customer(
     State(state): State<Arc<AppState>>,
     Path((_save_id, customer_id)): Path<(String, String)>,
 ) -> GameResult<Json<CustomerResponse>> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid customer_id UUID: {}", e),
-        }
+    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid customer_id UUID: {}", e),
     })?;
 
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
-    let customer = repo.find_by_id(customer_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let customer = repo
+        .find_by_id(customer_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Customer".to_string(),
             entity_id: customer_id.to_string(),
-        }
-    })?;
+        })?;
 
     Ok(Json(CustomerResponse::from(customer)))
 }
@@ -161,19 +156,18 @@ pub async fn update_customer(
     Path((_save_id, customer_id)): Path<(String, String)>,
     Json(payload): Json<UpdateCustomerRequest>,
 ) -> GameResult<()> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid customer_id UUID: {}", e),
-        }
+    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid customer_id UUID: {}", e),
     })?;
 
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
-    let mut customer = repo.find_by_id(customer_id).await?.ok_or_else(|| {
-        GameError::NotFound {
+    let mut customer = repo
+        .find_by_id(customer_id)
+        .await?
+        .ok_or_else(|| GameError::NotFound {
             entity_type: "Customer".to_string(),
             entity_id: customer_id.to_string(),
-        }
-    })?;
+        })?;
 
     if let Some(favorability) = payload.favorability {
         customer.favorability = favorability;
@@ -208,10 +202,8 @@ pub async fn delete_customer(
     State(state): State<Arc<AppState>>,
     Path((_save_id, customer_id)): Path<(String, String)>,
 ) -> GameResult<()> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| {
-        GameError::Validation {
-            details: format!("Invalid customer_id UUID: {}", e),
-        }
+    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
+        details: format!("Invalid customer_id UUID: {}", e),
     })?;
 
     let repo = CustomerRepository::new(state.db_pool.pool().clone());

@@ -22,7 +22,7 @@ impl DialogueRepository {
     pub async fn create(&self, message: &DialogueMessage) -> GameResult<()> {
         sqlx::query(
             r#"INSERT INTO dialogues (id, save_id, sender, content, timestamp, message_type, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (?, ?, ?, ?, ?, ?, ?)"#,
         )
         .bind(message.id.to_string())
         .bind(message.save_id.to_string())
@@ -42,7 +42,7 @@ impl DialogueRepository {
     pub async fn find_by_id(&self, id: Uuid) -> GameResult<Option<DialogueMessage>> {
         let row = sqlx::query_as::<_, DialogueRow>(
             r#"SELECT id, save_id, sender, content, timestamp, message_type, status
-               FROM dialogues WHERE id = ?"#
+               FROM dialogues WHERE id = ?"#,
         )
         .bind(id.to_string())
         .fetch_optional(&self.pool)
@@ -59,16 +59,14 @@ impl DialogueRepository {
     pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Vec<DialogueMessage>> {
         let rows = sqlx::query_as::<_, DialogueRow>(
             r#"SELECT id, save_id, sender, content, timestamp, message_type, status
-               FROM dialogues WHERE save_id = ? ORDER BY timestamp ASC"#
+               FROM dialogues WHERE save_id = ? ORDER BY timestamp ASC"#,
         )
         .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
 
-        rows.into_iter()
-            .map(|row| row.into_message())
-            .collect()
+        rows.into_iter().map(|row| row.into_message()).collect()
     }
 
     /// 获取存档的最近N条消息
@@ -76,7 +74,7 @@ impl DialogueRepository {
         let rows = sqlx::query_as::<_, DialogueRow>(
             r#"SELECT id, save_id, sender, content, timestamp, message_type, status
                FROM dialogues WHERE save_id = ?
-               ORDER BY timestamp DESC LIMIT ?"#
+               ORDER BY timestamp DESC LIMIT ?"#,
         )
         .bind(save_id.to_string())
         .bind(limit)
@@ -132,16 +130,12 @@ struct DialogueRow {
 impl DialogueRow {
     /// 将数据库行转换为 DialogueMessage 模型
     fn into_message(self) -> GameResult<DialogueMessage> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid UUID: {}", e),
-            }
+        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
         })?;
 
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| {
-            GameError::Validation {
-                details: format!("Invalid save_id UUID: {}", e),
-            }
+        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
+            details: format!("Invalid save_id UUID: {}", e),
         })?;
 
         let timestamp = DateTime::parse_from_rfc3339(&self.timestamp)

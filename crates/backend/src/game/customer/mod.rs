@@ -1,3 +1,4 @@
+#![allow(clippy::module_inception)]
 //! 顾客系统模块
 
 mod ai_generator;
@@ -111,7 +112,11 @@ impl CustomerManager {
 
     /// 移除顾客
     pub fn remove_customer(&mut self, customer_id: Uuid) -> Option<Customer> {
-        if let Some(pos) = self.active_customers.iter().position(|c| c.id == customer_id) {
+        if let Some(pos) = self
+            .active_customers
+            .iter()
+            .position(|c| c.id == customer_id)
+        {
             let customer = self.active_customers.remove(pos);
             self.updated_at = Utc::now();
             return Some(customer);
@@ -126,19 +131,25 @@ impl CustomerManager {
 
     /// 获取顾客（可变）
     pub fn get_customer_mut(&mut self, customer_id: Uuid) -> Option<&mut Customer> {
-        self.active_customers.iter_mut().find(|c| c.id == customer_id)
+        self.active_customers
+            .iter_mut()
+            .find(|c| c.id == customer_id)
     }
 
     /// 更新顾客好感度
-    pub fn update_affinity(&mut self, customer_id: Uuid, delta: i32) -> std::result::Result<(), String> {
+    pub fn update_affinity(
+        &mut self,
+        customer_id: Uuid,
+        delta: i32,
+    ) -> std::result::Result<(), String> {
         if let Some(customer) = self.get_customer_mut(customer_id) {
             customer.update_affinity(delta);
 
             // 如果是 VIP 顾客，记录
-            if customer.vip_status.level != VIPLevel::None {
-                if !self.vip_customers.contains(&customer_id) {
-                    self.vip_customers.push(customer_id);
-                }
+            if customer.vip_status.level != VIPLevel::None
+                && !self.vip_customers.contains(&customer_id)
+            {
+                self.vip_customers.push(customer_id);
             }
 
             self.updated_at = Utc::now();

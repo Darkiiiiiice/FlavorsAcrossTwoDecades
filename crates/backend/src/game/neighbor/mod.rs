@@ -1,14 +1,13 @@
+#![allow(clippy::module_inception)]
 //! 邻里系统模块
 //!
 //! 管理邻居角色、互动和好感度
 
-mod neighbor;
 mod interaction;
+mod neighbor;
 
+pub use interaction::{Interaction, InteractionManager, InteractionResult, InteractionType};
 pub use neighbor::{AffinityLevel, Neighbor, NeighborAbility, NeighborManager, NeighborRelation};
-pub use interaction::{
-    Interaction, InteractionType, InteractionResult, InteractionManager,
-};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

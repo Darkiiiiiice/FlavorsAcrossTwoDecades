@@ -1,14 +1,15 @@
+#![allow(clippy::module_inception)]
 //! 记忆碎片系统模块
 //!
 //! 管理玩家在游戏中收集的记忆碎片，逐步揭示小馆的历史和故事
 
 mod fragment;
-mod memory;
 mod manager;
+mod memory;
 
 pub use fragment::{MemoryFragment, MemoryFragmentType, MemoryRarity};
-pub use memory::{MemoryContent, SensoryMemory, Sense};
 pub use manager::MemoryManager;
+pub use memory::{MemoryContent, Sense, SensoryMemory};
 
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -134,7 +135,8 @@ impl UnlockCondition {
             UnlockConditionType::SpecialDate => {
                 let parts: Vec<&str> = self.value.split('/').collect();
                 if parts.len() == 2 {
-                    if let (Ok(month), Ok(day)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                    if let (Ok(month), Ok(day)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>())
+                    {
                         context.current_date.month() == month && context.current_date.day() == day
                     } else {
                         false
@@ -143,12 +145,8 @@ impl UnlockCondition {
                     false
                 }
             }
-            UnlockConditionType::DialogTopic => {
-                context.discussed_topics.contains(&self.value)
-            }
-            UnlockConditionType::RepairMilestone => {
-                context.repair_milestones.contains(&self.value)
-            }
+            UnlockConditionType::DialogTopic => context.discussed_topics.contains(&self.value),
+            UnlockConditionType::RepairMilestone => context.repair_milestones.contains(&self.value),
             UnlockConditionType::RecipeExperiment => {
                 context.completed_experiments.contains(&self.value)
             }
@@ -157,7 +155,12 @@ impl UnlockCondition {
                 let parts: Vec<&str> = self.value.split(':').collect();
                 if parts.len() == 2 {
                     if let Ok(level) = parts[1].parse::<u32>() {
-                        context.neighbor_affinity.get(parts[0]).copied().unwrap_or(0) >= level
+                        context
+                            .neighbor_affinity
+                            .get(parts[0])
+                            .copied()
+                            .unwrap_or(0)
+                            >= level
                     } else {
                         false
                     }

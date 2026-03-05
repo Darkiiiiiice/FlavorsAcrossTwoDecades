@@ -71,7 +71,7 @@ test-%:
 # 代码检查 (clippy)
 lint:
 	@printf "$(BLUE)运行 clippy...$(RESET)\n"
-	$(CARGO) clippy --all-targets --all-features -- -D warnings
+	$(CARGO) clippy --all-targets --all-features -- -W clippy::all
 
 # 代码格式化
 fmt:

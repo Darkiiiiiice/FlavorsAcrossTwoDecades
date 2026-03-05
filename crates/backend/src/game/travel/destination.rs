@@ -168,7 +168,10 @@ impl DestinationManager {
         dest.description = "探索小馆周边的老街区，寻找传统味道。".to_string();
         dest.scenery_description = "熟悉的街道，古老的建筑，充满生活气息的市井。".to_string();
         dest.unlock_condition = "默认解锁".to_string();
-        dest.available_recipes = vec!["home_tomato_egg".to_string(), "home_braised_pork".to_string()];
+        dest.available_recipes = vec![
+            "home_tomato_egg".to_string(),
+            "home_braised_pork".to_string(),
+        ];
         dest
     }
 
@@ -181,7 +184,8 @@ impl DestinationManager {
             "川菜".to_string(),
         );
         dest.description = "天府之国，美食之都。麻辣鲜香的川菜令人回味无穷。".to_string();
-        dest.scenery_description = "宽窄巷子的青石板路，锦里古街的红灯笼，还有那弥漫在空气中的麻辣香气。".to_string();
+        dest.scenery_description =
+            "宽窄巷子的青石板路，锦里古街的红灯笼，还有那弥漫在空气中的麻辣香气。".to_string();
         dest.required_trust = 30;
         dest.unlock_condition = "信任度达到 30".to_string();
         dest.features.push(DestinationFeature {
@@ -215,7 +219,8 @@ impl DestinationManager {
             "陕菜".to_string(),
         );
         dest.description = "古都长安，丝绸之路的起点。厚重的面食文化与浓郁的西北风味。".to_string();
-        dest.scenery_description = "古城墙的厚重，回民街的热闹，还有那飘香四溢的羊肉泡馍。".to_string();
+        dest.scenery_description =
+            "古城墙的厚重，回民街的热闹，还有那飘香四溢的羊肉泡馍。".to_string();
         dest.required_trust = 40;
         dest.unlock_condition = "信任度达到 40".to_string();
         dest.features.push(DestinationFeature {
@@ -241,7 +246,8 @@ impl DestinationManager {
             "粤菜".to_string(),
         );
         dest.description = "食在广州，粤菜之乡。清淡鲜美，讲究原汁原味。".to_string();
-        dest.scenery_description = "早茶楼的茶香，沙面岛的异国情调，珠江两岸的璀璨夜景。".to_string();
+        dest.scenery_description =
+            "早茶楼的茶香，沙面岛的异国情调，珠江两岸的璀璨夜景。".to_string();
         dest.required_trust = 50;
         dest.unlock_condition = "信任度达到 50".to_string();
         dest.features.push(DestinationFeature {
@@ -254,7 +260,8 @@ impl DestinationManager {
             "white_cut_chicken".to_string(),
             "roast_goose".to_string(),
         ];
-        dest.special_ingredients = vec!["cantonese_sausage".to_string(), "oyster_sauce".to_string()];
+        dest.special_ingredients =
+            vec!["cantonese_sausage".to_string(), "oyster_sauce".to_string()];
         dest
     }
 
@@ -293,7 +300,8 @@ impl DestinationManager {
             "法餐".to_string(),
         );
         dest.description = "浪漫之都，世界美食的殿堂。精致优雅的法式料理艺术。".to_string();
-        dest.scenery_description = "塞纳河畔的咖啡香，香榭丽舍大道的优雅，埃菲尔铁塔的浪漫。".to_string();
+        dest.scenery_description =
+            "塞纳河畔的咖啡香，香榭丽舍大道的优雅，埃菲尔铁塔的浪漫。".to_string();
         dest.required_trust = 70;
         dest.unlock_condition = "信任度达到 70".to_string();
         dest.features.push(DestinationFeature {
@@ -306,7 +314,10 @@ impl DestinationManager {
             "coq_au_vin".to_string(),
             "croissant".to_string(),
         ];
-        dest.special_ingredients = vec!["french_butter".to_string(), "herbes_de_provence".to_string()];
+        dest.special_ingredients = vec![
+            "french_butter".to_string(),
+            "herbes_de_provence".to_string(),
+        ];
         dest
     }
 
@@ -345,7 +356,8 @@ impl DestinationManager {
             "泰餐".to_string(),
         );
         dest.description = "天使之城，香料的天堂。酸辣甜咸的完美平衡。".to_string();
-        dest.scenery_description = "大皇宫的金碧辉煌，湄南河的繁忙，街头小吃的诱人香气。".to_string();
+        dest.scenery_description =
+            "大皇宫的金碧辉煌，湄南河的繁忙，街头小吃的诱人香气。".to_string();
         dest.required_trust = 55;
         dest.unlock_condition = "信任度达到 55".to_string();
         dest.features.push(DestinationFeature {

@@ -117,15 +117,15 @@ impl Preference {
         let mut rng = rand::rng();
 
         // 随机添加喜欢的菜品类型
-        let categories = vec!["川菜", "粤菜", "湘菜", "鲁菜", "西餐", "日料"];
+        let categories = ["川菜", "粤菜", "湘菜", "鲁菜", "西餐", "日料"];
         let count = 1 + rng.random_range(0..3);
 
         for _ in 0..count {
             let idx = rng.random_range(0..categories.len());
-            if let Some(cat) = categories.get(idx) {
-                if !pref.favorite_categories.contains(&cat.to_string()) {
-                    pref.favorite_categories.push(cat.to_string());
-                }
+            if let Some(cat) = categories.get(idx)
+                && !pref.favorite_categories.contains(&cat.to_string())
+            {
+                pref.favorite_categories.push(cat.to_string());
             }
         }
 

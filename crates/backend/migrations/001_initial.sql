@@ -5,9 +5,11 @@
 CREATE TABLE IF NOT EXISTS saves (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    player_name TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    data TEXT NOT NULL  -- JSON 格式的游戏状态
+    play_time_seconds INTEGER NOT NULL DEFAULT 0,
+    chapter INTEGER NOT NULL DEFAULT 1
 );
 
 -- 玩家配置表
