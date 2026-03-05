@@ -88,20 +88,17 @@ impl RecipeRepository {
 
 fn category_to_string(category: &RecipeCategory) -> String {
     match category {
-        RecipeCategory::Sichuan => "sichuan",
-        RecipeCategory::Cantonese => "cantonese",
-        RecipeCategory::Hunan => "hunan",
-        RecipeCategory::Shandong => "shandong",
-        RecipeCategory::Jiangsu => "jiangsu",
-        RecipeCategory::Zhejiang => "zhejiang",
-        RecipeCategory::Anhui => "anhui",
-        RecipeCategory::Fujian => "fujian",
-        RecipeCategory::Henan => "henan",
-        RecipeCategory::Guangdong => "guangdong",
-        RecipeCategory::Hubei => "hubei",
-        RecipeCategory::Hunan => "hunan",
-        RecipeCategory::Dongbei => "dongbei",
-        RecipeCategory::Other => "other",
+        RecipeCategory::Sichuan => "sichuan".to_string(),
+        RecipeCategory::Cantonese => "cantonese".to_string(),
+        RecipeCategory::Hunan => "hunan".to_string(),
+        RecipeCategory::Shandong => "shandong".to_string(),
+        RecipeCategory::Jiangsu => "jiangsu".to_string(),
+        RecipeCategory::Zhejiang => "zhejiang".to_string(),
+        RecipeCategory::Anhui => "anhui".to_string(),
+        RecipeCategory::Fujian => "fujian".to_string(),
+        RecipeCategory::HomeStyle => "homestyle".to_string(),
+        RecipeCategory::Creative => "creative".to_string(),
+        RecipeCategory::Foreign => "foreign".to_string(),
     }
 }
 
@@ -115,11 +112,9 @@ fn string_to_category(s: &str) -> GameResult<RecipeCategory> {
         "zhejiang" => Ok(RecipeCategory::Zhejiang),
         "anhui" => Ok(RecipeCategory::Anhui),
         "fujian" => Ok(RecipeCategory::Fujian),
-        "henan" => Ok(RecipeCategory::Henan),
-        "guangdong" => Ok(RecipeCategory::Guangdong),
-        "hubei" => Ok(RecipeCategory::Hubei),
-        "dongbei" => Ok(RecipeCategory::Dongbei),
-        "other" => Ok(RecipeCategory::Other),
+        "homestyle" => Ok(RecipeCategory::HomeStyle),
+        "creative" => Ok(RecipeCategory::Creative),
+        "foreign" => Ok(RecipeCategory::Foreign),
         _ => Err(GameError::Validation {
             details: format!("Invalid recipe category: {}", s),
         }),
@@ -128,10 +123,10 @@ fn string_to_category(s: &str) -> GameResult<RecipeCategory> {
 
 fn status_to_string(status: &RecipeStatus) -> String {
     match status {
-        RecipeStatus::Damaged => "damaged",
-        RecipeStatus::Fuzzy => "fuzzy",
-        RecipeStatus::Precise => "precise",
-        RecipeStatus::Mastered => "mastered",
+        RecipeStatus::Damaged => "damaged".to_string(),
+        RecipeStatus::Fuzzy => "fuzzy".to_string(),
+        RecipeStatus::Precise => "precise".to_string(),
+        RecipeStatus::Mastered => "mastered".to_string(),
     }
 }
 
@@ -149,9 +144,9 @@ fn string_to_status(s: &str) -> GameResult<RecipeStatus> {
 
 fn source_to_string(source: &RecipeSource) -> String {
     match source {
-        RecipeSource::Inherited => "inherited",
-        RecipeSource::Travel => "travel",
-        RecipeSource::Innovation => "innovation",
+        RecipeSource::Inherited => "inherited".to_string(),
+        RecipeSource::Travel => "travel".to_string(),
+        RecipeSource::Innovation => "innovation".to_string(),
     }
 }
 
