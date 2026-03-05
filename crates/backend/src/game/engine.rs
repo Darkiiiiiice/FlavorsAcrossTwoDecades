@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 use tokio::time::{Duration, interval};
+use tokio_util::sync::CancellationToken;
 
 use super::command::CommandQueue;
 use super::event::EventDispatcher;
@@ -18,13 +19,18 @@ pub struct GameEngine {
     event_dispatcher: EventDispatcher,
     /// LLM 管理器
     llm_manager: Arc<LlmManager>,
-    /// 是否运行中
-    running: bool,
+    /// 取消令牌（用于优雅退出）
+    cancel_token: CancellationToken,
 }
 
 impl GameEngine {
     /// 创建新的游戏引擎
     pub fn new(llm_manager: Arc<LlmManager>) -> Self {
+        Self::with_cancel_token(llm_manager, CancellationToken::new())
+    }
+
+    /// 使用指定的取消令牌创建游戏引擎
+    pub fn with_cancel_token(llm_manager: Arc<LlmManager>, cancel_token: CancellationToken) -> Self {
         let delay = CommunicationDelay::default();
 
         Self {
@@ -32,44 +38,57 @@ impl GameEngine {
             command_queue: CommandQueue::new(delay),
             event_dispatcher: EventDispatcher::new(),
             llm_manager,
-            running: false,
+            cancel_token,
         }
+    }
+
+    /// 获取取消令牌的克隆（用于外部触发停止）
+    pub fn cancel_token(&self) -> CancellationToken {
+        self.cancel_token.clone()
     }
 
     /// 启动游戏引擎
     pub async fn start(&mut self) {
-        self.running = true;
         self.run().await;
     }
 
     /// 停止游戏引擎
-    pub fn stop(&mut self) {
-        self.running = false;
+    pub fn stop(&self) {
+        self.cancel_token.cancel();
     }
 
     /// 主循环
     async fn run(&mut self) {
         let mut tick_interval = interval(Duration::from_secs(1));
 
-        while self.running {
-            tick_interval.tick().await;
-
-            // 1. 处理时间更新
-            self.time_system.tick();
-
-            // 2. 处理到达的指令
-            let arrived_commands = self.command_queue.process_arrived();
-            for cmd in arrived_commands {
-                if let Err(e) = self.process_command(cmd).await {
-                    tracing::error!("Failed to process command: {}", e);
+        loop {
+            // 使用 select! 来同时等待 tick 和取消信号
+            tokio::select! {
+                _ = self.cancel_token.cancelled() => {
+                    tracing::info!("GameEngine received shutdown signal");
+                    break;
                 }
-            }
+                _ = tick_interval.tick() => {
+                    tracing::info!("Tick!!!");
 
-            // 3. 处理到期事件
-            let due_events = self.event_dispatcher.process_due_events();
-            for event in due_events {
-                if let Err(e) = self.process_event(event).await {
-                    tracing::error!("Failed to process event: {}", e);
+                    // 1. 处理时间更新
+                    self.time_system.tick();
+
+                    // 2. 处理到达的指令
+                    let arrived_commands = self.command_queue.process_arrived();
+                    for cmd in arrived_commands {
+                        if let Err(e) = self.process_command(cmd).await {
+                            tracing::error!("Failed to process command: {}", e);
+                        }
+                    }
+
+                    // 3. 处理到期事件
+                    let due_events = self.event_dispatcher.process_due_events();
+                    for event in due_events {
+                        if let Err(e) = self.process_event(event).await {
+                            tracing::error!("Failed to process event: {}", e);
+                        }
+                    }
                 }
             }
         }
@@ -146,6 +165,7 @@ mod tests {
         let llm_manager = Arc::new(LlmManager::new(Arc::new(provider), config));
 
         let engine = GameEngine::new(llm_manager);
-        assert!(!engine.running);
+        // 验证取消令牌未被触发
+        assert!(!engine.cancel_token().is_cancelled());
     }
 }

@@ -3,7 +3,7 @@
     "label": "Run Backend",
     "adapter": "CodeLLDB",
     "request": "launch",
-    "program": "$ZED_WORKTREE_ROOT/target/debug/flavors_backend",
+    "program": "$ZED_WORKTREE_ROOT/target/debug/flavors-backend",
     "args": [
       "-c",
       "$ZED_WORKTREE_ROOT/crates/backend/config/default.toml"

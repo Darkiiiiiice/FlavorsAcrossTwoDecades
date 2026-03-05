@@ -4,6 +4,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use axum::Router;
 use clap::Parser;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -59,7 +60,7 @@ use flavors_backend::api::{
 };
 use flavors_backend::config::Settings;
 use flavors_backend::db::DbPool;
-use flavors_backend::game::AppState;
+use flavors_backend::game::{AppState, GameEngine, create_llm_manager};
 
 /// 命令行参数
 #[derive(Parser, Debug)]
@@ -267,8 +268,28 @@ async fn main() -> Result<()> {
     // 初始化数据库
     let db_pool = init_database(&settings).await?;
 
+    // 创建 LLM 管理器（失败则不允许启动）
+    let llm_manager = create_llm_manager(settings.llm.clone())
+        .map_err(|e| anyhow::anyhow!("Failed to initialize LLM: {}", e))?;
+
+    // 创建取消令牌（用于优雅退出）
+    let cancel_token = CancellationToken::new();
+
+    // 创建游戏引擎（使用共享的取消令牌）
+    let game_engine = Arc::new(GameEngine::with_cancel_token(
+        Arc::clone(&llm_manager),
+        cancel_token.clone(),
+    ));
+
+    // 启动游戏引擎（后台运行）
+    let mut engine = GameEngine::with_cancel_token(llm_manager, cancel_token.clone());
+    let engine_task = tokio::spawn(async move {
+        engine.start().await;
+    });
+    info!("GameEngine started");
+
     // 创建 API 状态
-    let state = Arc::new(AppState::new(db_pool, settings.llm.clone()));
+    let state = Arc::new(AppState::new(db_pool, settings.llm.clone(), game_engine));
 
     // 创建路由
     let app = create_router(state);
@@ -279,8 +300,34 @@ async fn main() -> Result<()> {
     info!("Swagger UI: http://{}/swagger-ui/", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    axum::serve(listener, app).await?;
 
-    info!("Server stopped");
+    // 设置 Ctrl+C 信号监听
+    let shutdown_token = cancel_token.clone();
+    tokio::spawn(async move {
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!("Received Ctrl+C signal, initiating graceful shutdown...");
+                shutdown_token.cancel();
+            }
+            Err(e) => {
+                tracing::error!("Failed to listen for Ctrl+C: {}", e);
+            }
+        }
+    });
+
+    // 使用优雅关闭运行服务器
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            cancel_token.cancelled().await;
+            info!("HTTP server shutting down...");
+        })
+        .await?;
+
+    // 等待游戏引擎完全停止
+    info!("Waiting for GameEngine to stop...");
+    engine_task.await?;
+    info!("GameEngine stopped");
+
+    info!("Server stopped gracefully");
     Ok(())
 }

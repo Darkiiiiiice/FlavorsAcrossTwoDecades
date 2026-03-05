@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 # 异步运行时
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 
 # Web 框架
 axum = { workspace = true }
