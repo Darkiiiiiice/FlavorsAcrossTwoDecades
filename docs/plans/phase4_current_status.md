@@ -2,7 +2,7 @@
 
 **分支**: `feature/phase4-integration-testing`
 **开始时间**: 2026-03-05
-**当前阶段**: 第一阶段 - 修复基础问题
+**当前阶段**: 第二阶段 - 完善仓储层
 
 ---
 
@@ -12,16 +12,19 @@
 - ✅ 创建新分支 `feature/phase4-integration-testing`
 - ✅ 创建详细的开发计划文档
 - ✅ 修复 `save_repository.rs` 的编译错误
+- ✅ 重构 `saves.rs` API，使用仓储层
+- ✅ 实现 `CommandRepository` 完整功能
 - ✅ 项目成功编译（只有警告，无错误）
 
 ---
 
 ## 🔄 进行中
 
-### 第一阶段：修复基础问题
-- [ ] 检查其他仓储层的实现
-- [ ] 确保所有数据模型正确
-- [ ] 验证数据库迁移文件
+### 第二阶段：完善仓储层
+- [x] SaveRepository - 存档管理（已完成）
+- [x] CommandRepository - 指令管理（已完成）
+- [ ] DialogueRepository - 对话管理
+- [ ] 其他子系统仓储
 
 ---
 

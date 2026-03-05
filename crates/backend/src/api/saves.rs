@@ -1,16 +1,16 @@
 //! 存档 API 模块
+
 use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
 };
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
+use crate::db::models::save::{Save, CreateSaveRequest as ModelCreateSaveRequest};
+use crate::db::repositories::save_repository::SaveRepository;
 use crate::error::{GameError, GameResult};
 use crate::game::AppState;
 
@@ -21,10 +21,24 @@ pub struct SaveInfo {
     pub id: String,
     /// 存档名称
     pub name: String,
+    /// 玩家名称
+    pub player_name: String,
     /// 创建时间
     pub created_at: String,
     /// 更新时间
     pub updated_at: String,
+}
+
+impl From<Save> for SaveInfo {
+    fn from(save: Save) -> Self {
+        Self {
+            id: save.id.to_string(),
+            name: save.name,
+            player_name: save.player_name,
+            created_at: save.created_at.to_rfc3339(),
+            updated_at: save.last_played.to_rfc3339(),
+        }
+    }
 }
 
 /// 创建存档请求
@@ -32,6 +46,8 @@ pub struct SaveInfo {
 pub struct CreateSaveRequest {
     /// 存档名称
     pub name: String,
+    /// 玩家名称
+    pub player_name: String,
 }
 
 /// 创建存档响应
@@ -41,6 +57,8 @@ pub struct CreateSaveResponse {
     pub id: String,
     /// 存档名称
     pub name: String,
+    /// 玩家名称
+    pub player_name: String,
     /// 创建时间
     pub created_at: String,
     /// 消息
@@ -59,45 +77,28 @@ pub struct SaveListResponse {
 /// 获取所有存档
 #[utoipa::path(
     get,
-    path = "/api/saves",
+    path = "/api/v1/saves",
     tag = "saves",
     responses(
         (status = 200, description = "获取存档列表成功", body = SaveListResponse)
     )
 )]
 pub async fn list_saves(State(state): State<Arc<AppState>>) -> GameResult<Json<SaveListResponse>> {
-    let pool = state.db_pool.pool();
+    let repo = SaveRepository::new(state.db_pool.pool().clone());
+    let saves = repo.find_all().await?;
 
-    let rows = sqlx::query("SELECT id, name, created_at, updated_at FROM saves")
-        .fetch_all(pool)
-        .await
-        .map_err(|e| {
-            GameError::Database(crate::error::DatabaseError::QueryFailed(format!(
-                "Failed to list saves: {}",
-                e
-            )))
-        })?;
-
-    let saves: Vec<SaveInfo> = rows
-        .iter()
-        .map(|row| SaveInfo {
-            id: row.get(0),
-            name: row.get(1),
-            created_at: row.get(2),
-            updated_at: row.get(3),
-        })
-        .collect();
+    let save_infos: Vec<SaveInfo> = saves.into_iter().map(SaveInfo::from).collect();
 
     Ok(Json(SaveListResponse {
-        total: saves.len(),
-        saves,
+        total: save_infos.len(),
+        saves: save_infos,
     }))
 }
 
 /// 创建新存档
 #[utoipa::path(
     post,
-    path = "/api/saves",
+    path = "/api/v1/saves",
     tag = "saves",
     request_body = CreateSaveRequest,
     responses(
@@ -109,29 +110,19 @@ pub async fn create_save(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateSaveRequest>,
 ) -> GameResult<Json<CreateSaveResponse>> {
-    let pool = state.db_pool.pool();
-    let id = Uuid::new_v4().to_string();
-    let name = payload.name;
-    let now = Utc::now().to_rfc3339();
+    let repo = SaveRepository::new(state.db_pool.pool().clone());
 
-    sqlx::query("INSERT INTO saves (id, name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)")
-        .bind(&id)
-        .bind(&name)
-        .bind(&now)
-        .bind(&now)
-        .execute(pool)
-        .await
-        .map_err(|e| {
-            GameError::Database(crate::error::DatabaseError::WriteFailed(format!(
-                "Failed to create save: {}",
-                e
-            )))
-        })?;
+    let save = Save::new(payload.name, payload.player_name);
+    let save_id = save.id;
+    let created_at = save.created_at;
+
+    repo.create(&save).await?;
 
     Ok(Json(CreateSaveResponse {
-        id,
-        name,
-        created_at: now,
+        id: save_id.to_string(),
+        name: save.name,
+        player_name: save.player_name,
+        created_at: created_at.to_rfc3339(),
         message: "Save created successfully".to_string(),
     }))
 }
@@ -139,7 +130,7 @@ pub async fn create_save(
 /// 获取存档详情
 #[utoipa::path(
     get,
-    path = "/api/saves/{save_id}",
+    path = "/api/v1/saves/{save_id}",
     tag = "saves",
     params(
         ("save_id" = String, Path, description = "存档 ID")
@@ -153,37 +144,28 @@ pub async fn get_save(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<Json<SaveInfo>> {
-    let pool = state.db_pool.pool();
+    let repo = SaveRepository::new(state.db_pool.pool().clone());
 
-    let row = sqlx::query("SELECT id, name, created_at, updated_at FROM saves WHERE id = ?1")
-        .bind(&save_id)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| {
-            GameError::Database(crate::error::DatabaseError::QueryFailed(format!(
-                "Failed to get save: {}",
-                e
-            )))
-        })?;
+    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| {
+        GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
+        }
+    })?;
 
-    match row {
-        Some(row) => Ok(Json(SaveInfo {
-            id: row.get(0),
-            name: row.get(1),
-            created_at: row.get(2),
-            updated_at: row.get(3),
-        })),
-        None => Err(GameError::NotFound {
+    let save = repo.find_by_id(save_id).await?.ok_or_else(|| {
+        GameError::NotFound {
             entity_type: "Save".to_string(),
-            entity_id: save_id,
-        }),
-    }
+            entity_id: save_id.to_string(),
+        }
+    })?;
+
+    Ok(Json(SaveInfo::from(save)))
 }
 
 /// 删除存档
 #[utoipa::path(
     delete,
-    path = "/api/saves/{save_id}",
+    path = "/api/v1/saves/{save_id}",
     tag = "saves",
     params(
         ("save_id" = String, Path, description = "存档 ID")
@@ -197,25 +179,23 @@ pub async fn delete_save(
     State(state): State<Arc<AppState>>,
     Path(save_id): Path<String>,
 ) -> GameResult<StatusCode> {
-    let pool = state.db_pool.pool();
+    let repo = SaveRepository::new(state.db_pool.pool().clone());
 
-    let result = sqlx::query("DELETE FROM saves WHERE id = ?1")
-        .bind(&save_id)
-        .execute(pool)
-        .await
-        .map_err(|e| {
-            GameError::Database(crate::error::DatabaseError::WriteFailed(format!(
-                "Failed to delete save: {}",
-                e
-            )))
-        })?;
+    let save_id = uuid::Uuid::parse_str(&save_id).map_err(|e| {
+        GameError::Validation {
+            details: format!("Invalid UUID: {}", e),
+        }
+    })?;
 
-    if result.rows_affected() == 0 {
-        Err(GameError::NotFound {
+    // 先检查存档是否存在
+    let save = repo.find_by_id(save_id).await?;
+    if save.is_none() {
+        return Err(GameError::NotFound {
             entity_type: "Save".to_string(),
-            entity_id: save_id,
-        })
-    } else {
-        Ok(StatusCode::NO_CONTENT)
+            entity_id: save_id.to_string(),
+        });
     }
+
+    repo.delete(save_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
