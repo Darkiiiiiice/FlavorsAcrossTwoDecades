@@ -52,6 +52,8 @@ handlebars = { workspace = true }
 
 # 随机数
 rand = { workspace = true }
+# 正则表达式
+regex = { workspace = true }
 
 # 异步 trait
 async-trait = { workspace = true }
@@ -68,6 +70,3 @@ utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
 
-[profile.dev]
-debug = "full"
-limit =  true

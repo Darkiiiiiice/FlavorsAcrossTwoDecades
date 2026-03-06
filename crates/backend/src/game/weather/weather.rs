@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use rand::RngExt;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -498,26 +499,31 @@ async fn generate_weather_with_llm_standalone(
 
     tracing::info!("LLM returned response for weather: \n{}", response);
 
-    // 解析 LLM 返回的天气类型和温度
-    let mut weather_type: Option<WeatherType> = None;
-    let mut temperature: Option<f32> = None;
+    // 使用正则表达式解析 LLM 返回的天气类型和温度
+    // 正则可以匹配 LLM 返回的多余内容，只提取关键信息
+    let weather_type = Regex::new(r"Weather[：:]\s*(\S+)")
+        .ok()
+        .and_then(|re| re.captures(&response))
+        .and_then(|caps| caps.get(1))
+        .and_then(|m| parse_weather_type_standalone(m.as_str()));
 
-    for line in response.lines() {
-        let line = line.trim();
-        if line.starts_with("天气:") || line.starts_with("天气：") {
-            let name = line.split([':', '：']).last().unwrap_or("").trim();
-            weather_type = parse_weather_type_standalone(name);
-        } else if line.starts_with("温度:") || line.starts_with("温度：") {
-            let temp_str = line.split([':', '：']).last().unwrap_or("").trim();
-            temperature = temp_str.parse::<f32>().ok();
-        }
-    }
+    let temperature = Regex::new(r"Temperature[：:]\s*(-?\d+\.?\d*)")
+        .ok()
+        .and_then(|re| re.captures(&response))
+        .and_then(|caps| caps.get(1))
+        .and_then(|m| m.as_str().parse::<f32>().ok());
 
     let weather_type = weather_type.ok_or_else(|| {
-        crate::error::GameError::LlmError("Missing weather type in response".to_string())
+        crate::error::GameError::LlmError(format!(
+            "Missing or invalid weather type in response: {}",
+            response
+        ))
     })?;
     let temperature = temperature.ok_or_else(|| {
-        crate::error::GameError::LlmError("Missing temperature in response".to_string())
+        crate::error::GameError::LlmError(format!(
+            "Missing or invalid temperature in response: {}",
+            response
+        ))
     })?;
 
     // 验证温度是否在合理范围内

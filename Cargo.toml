@@ -54,6 +54,8 @@ ollama-rs = "0.3"
 handlebars = "6.0.0"
 
 # 随机数
+# 正则表达式
+regex = "1.11.1"
 rand = "0.10.0"
 
 # 异步 trait
@@ -72,3 +74,6 @@ crossterm = "0.29.0"
 # OpenAPI 文档
 utoipa = "5.4.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+
+[profile.dev]
+debug = "full"
