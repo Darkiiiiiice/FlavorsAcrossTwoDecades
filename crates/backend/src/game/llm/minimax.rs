@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use futures::stream;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 use crate::config::LlmConfig;
 use crate::error::{GameError, Result};
@@ -133,27 +132,36 @@ impl LlmProvider for MinimaxProvider {
             .map_err(|e| GameError::LlmError(format!("MiniMax request failed: {}", e)))?;
 
         let status = response.status();
+        tracing::info!("minimax response status: {}", status);
+
         let response_text = response
             .text()
             .await
             .map_err(|e| GameError::LlmError(format!("Failed to read response: {}", e)))?;
 
+        tracing::info!("minimax response body: {}", response_text);
+
         if !status.is_success() {
-            tracing::error!("MiniMax API error: status={}, body={}", status, response_text);
+            tracing::error!(
+                "MiniMax API error: status={}, body={}",
+                status,
+                response_text
+            );
             return Err(GameError::LlmError(format!(
                 "MiniMax API error: {} - {}",
                 status, response_text
             )));
         }
 
-        let minimax_response: MinimaxResponse = serde_json::from_str(&response_text).map_err(
-            |e| {
+        let minimax_response: MinimaxResponse =
+            serde_json::from_str(&response_text).map_err(|e| {
                 GameError::LlmError(format!(
                     "Failed to parse MiniMax response: {} - {}",
                     e, response_text
                 ))
-            },
-        )?;
+            })?;
+
+        tracing::info!("minimax response: {:?}", minimax_response);
 
         // 检查 base_resp 中的错误
         if let Some(base_resp) = &minimax_response.base_resp {

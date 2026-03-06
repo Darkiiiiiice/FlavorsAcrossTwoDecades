@@ -3,6 +3,8 @@
 use async_trait::async_trait;
 use futures::stream;
 use ollama_rs::Ollama;
+use ollama_rs::generation::parameters::ThinkType;
+use ollama_rs::models::ModelOptions;
 use std::sync::Arc;
 
 use crate::config::LlmConfig;
@@ -41,13 +43,43 @@ impl LlmProvider for OllamaProvider {
             self.model.clone(),
             request.user_message.clone(),
         )
+        // .think(ThinkType::High)
         .system(request.system_prompt.clone());
+
+        tracing::info!("ollama request: {:?}", gen_request);
 
         let response = self
             .client
             .generate(gen_request)
             .await
             .map_err(|e| GameError::LlmError(format!("Ollama generation failed: {}", e)))?;
+
+        tracing::info!("ollama response model: {:?}", response.model);
+        tracing::info!("ollama response created_at: {:?}", response.created_at);
+        tracing::info!("ollama response response: {:?}", response.response);
+        tracing::info!("ollama response done: {:?}", response.done);
+        tracing::info!(
+            "ollama response total_duration: {:?}",
+            response.total_duration
+        );
+        tracing::info!(
+            "ollama response load_duration: {:?}",
+            response.load_duration
+        );
+        tracing::info!(
+            "ollama response prompt_eval_count: {:?}",
+            response.prompt_eval_count
+        );
+        tracing::info!(
+            "ollama response prompt_eval_duration: {:?}",
+            response.prompt_eval_duration
+        );
+        tracing::info!("ollama response eval_count: {:?}", response.eval_count);
+        tracing::info!(
+            "ollama response eval_duration: {:?}",
+            response.eval_duration
+        );
+        tracing::info!("ollama response think: {:?}", response.thinking);
 
         Ok(LlmResponse {
             content: response.response,

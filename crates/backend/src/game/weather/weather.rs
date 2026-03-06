@@ -13,6 +13,8 @@ use crate::{
     utils::get_month,
 };
 
+const MAX_HISTORY: usize = 120;
+
 /// 天气季节倾向
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WeatherSeason {
@@ -252,7 +254,7 @@ impl Weather {
             weather_type,
             effect,
             temperature: temperature as f64,
-            duration_hours: 60,
+            duration_hours: 20,
             create_at: Utc::now(),
         }
     }
@@ -469,7 +471,7 @@ async fn generate_weather_with_llm_standalone(
     let history_vec: Vec<String> = history
         .iter()
         .rev()
-        .take(7)
+        .take(MAX_HISTORY)
         .enumerate()
         .map(|(i, w)| {
             format!(
@@ -638,7 +640,7 @@ impl WeatherManager {
         let weather_repo = WeatherRepository::new(self.db_pool.pool().clone());
         if self.history.len() == 0 {
             tracing::info!("Updating weather history from database...");
-            let latest_weather = weather_repo.find_newest(7).await;
+            let latest_weather = weather_repo.find_newest(MAX_HISTORY as i32).await;
             if let Ok(mut latest_weathers) = latest_weather {
                 latest_weathers.reverse();
                 for weather in latest_weathers {
@@ -669,7 +671,7 @@ impl WeatherManager {
                             self.history.push(self.current_weather.clone());
 
                             // 保留最近30天的历史
-                            if self.history.len() > 30 {
+                            if self.history.len() > MAX_HISTORY {
                                 self.history.remove(0);
                             }
                         }
