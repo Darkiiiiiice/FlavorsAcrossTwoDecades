@@ -4,6 +4,7 @@
 
 mod effect;
 mod holiday;
+mod prompt;
 mod weather;
 
 use std::sync::Arc;
@@ -92,7 +93,7 @@ impl EnvironmentState {
 }
 
 /// 环境管理器
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EnvironmentManager {
     /// 当前环境状态
     pub state: EnvironmentState,

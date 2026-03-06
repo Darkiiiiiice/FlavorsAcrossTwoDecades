@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::recipe::{IngredientAmount, Recipe, RecipeStatus};
+use super::recipe::{IngredientAmount, Recipe};
 
 /// 实验状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -434,7 +434,6 @@ mod tests {
             RecipeCategory::HomeStyle,
             RecipeSource::Inherited,
         );
-        recipe.status = RecipeStatus::Fuzzy;
         recipe.add_ingredient(IngredientAmount::fuzzy(
             "tomato".to_string(),
             "番茄".to_string(),
