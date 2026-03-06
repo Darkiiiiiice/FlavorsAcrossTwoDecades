@@ -51,14 +51,14 @@ impl WeatherPromptBuilder {
 
     /// 构建系统提示词
     pub fn build_system_prompt(&self) -> &'static str {
-        r#"你是一个游戏天气模拟系统。请根据当前时间、季节、天气概率分布和最近天气历史，为今天选择一个天气类型和温度。
+        r#"你是一个游戏天气模拟系统。请根据当前时间、季节、天气概率分布和最近一段时间内的天气历史，为当前时刻选择一个天气类型和温度。
 
 输出格式要求（必须严格遵守）：
 天气: <天气名称>
 温度: <温度数值>
 
 规则：
-1. 参考最近天气历史，让天气变化有连续性（如连续几天晴天后可能转阴或下雨）
+1. 参考最近天气历史，让天气变化有连续性（如连续一段时间晴天后可能转阴或下雨）
 2. 严格按照给定的概率分布选择天气，概率越高的天气越可能被选中
 3. 温度必须在给定的温度范围内，保留一位小数
 4. 温度变化应该平缓，参考历史温度，避免剧烈波动
@@ -87,13 +87,8 @@ impl WeatherPromptBuilder {
 最近天气记录：
 {}
 
-请根据以上信息，为今天生成天气和温度。"#,
-            current_time,
-            season_name,
-            season_desc,
-            weather_probs_str,
-            temp_range_str,
-            history_str
+请根据以上信息，为当前时刻生成天气和温度。"#,
+            current_time, season_name, season_desc, weather_probs_str, temp_range_str, history_str
         )
     }
 
