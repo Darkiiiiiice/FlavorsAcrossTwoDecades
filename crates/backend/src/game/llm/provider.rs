@@ -121,6 +121,8 @@ impl LlmManager {
         system_prompt: String,
         user_message: String,
     ) -> Result<String> {
+        use std::time::Instant;
+
         let request = LlmRequest {
             system_prompt,
             user_message,
@@ -128,9 +130,28 @@ impl LlmManager {
             max_tokens: Some(self.config.max_tokens),
         };
 
-        match self.provider.generate(request).await {
-            Ok(response) => Ok(response.content),
-            Err(e) => Err(e),
+        let start = Instant::now();
+        let result = self.provider.generate(request).await;
+        let elapsed = start.elapsed();
+
+        match result {
+            Ok(response) => {
+                tracing::info!(
+                    "LLM call completed in {:.2?}ms (model: {})",
+                    elapsed.as_secs_f64() * 1000.0,
+                    self.config.model
+                );
+                Ok(response.content)
+            }
+            Err(e) => {
+                tracing::error!(
+                    "LLM call failed after {:.2?}ms (model: {}): {}",
+                    elapsed.as_secs_f64() * 1000.0,
+                    self.config.model,
+                    e
+                );
+                Err(e)
+            }
         }
     }
 
