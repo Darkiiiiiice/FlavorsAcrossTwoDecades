@@ -1,7 +1,6 @@
 //! OpenAPI 文档配置
 
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api::health::*;
 
@@ -32,8 +31,8 @@ use crate::api::health::*;
 pub struct ApiDoc;
 
 impl ApiDoc {
-    /// 创建 Swagger UI 路由
-    pub fn swagger_ui() -> SwaggerUi {
-        SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", Self::openapi())
+    /// 获取 OpenAPI JSON 文档
+    pub fn openapi_json() -> String {
+        serde_json::to_string_pretty(&Self::openapi()).unwrap_or_default()
     }
 }

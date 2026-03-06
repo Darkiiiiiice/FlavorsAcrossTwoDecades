@@ -9,7 +9,7 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use flavors_backend::api::{
-    ApiDoc, complete_travel, create_recipe, delete_customer, get_command, get_current_travel,
+    complete_travel, create_recipe, delete_customer, get_command, get_current_travel,
     get_customer, get_dialogue_history, get_memory, get_message, get_panpan, get_plot, get_recipe,
     get_shop, get_travel, harvest_crop, health_check, list_commands, list_customers, list_memories,
     list_plots, list_recipes, list_travels, liveness_check, plant_crop, purchase_item,
@@ -162,8 +162,6 @@ fn create_router(state: Arc<AppState>) -> Router {
     // 合并所有路由
     Router::new()
         .nest("/api/v1", api_routes)
-        // Swagger UI
-        .merge(ApiDoc::swagger_ui())
         .with_state(state)
 }
 
@@ -207,7 +205,6 @@ async fn main() -> Result<()> {
     // 启动服务器
     let addr = settings.server.addr();
     info!("Server listening on {}", addr);
-    info!("Swagger UI: http://{}/swagger-ui/", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 

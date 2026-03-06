@@ -73,7 +73,6 @@ crossterm = "0.29.0"
 
 # OpenAPI 文档
 utoipa = "5.4.0"
-utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 [profile.dev]
 debug = "full"
