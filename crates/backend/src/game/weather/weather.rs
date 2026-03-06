@@ -646,6 +646,13 @@ impl WeatherManager {
                             tracing::error!("Failed to save new weather: {:?}", e);
                         } else {
                             self.current_weather = new_weather;
+                            // 保存当前天气到历史
+                            self.history.push(self.current_weather.clone());
+
+                            // 保留最近30天的历史
+                            if self.history.len() > 30 {
+                                self.history.remove(0);
+                            }
                         }
                         self.pending_timestamp = None;
                     }
@@ -695,14 +702,6 @@ impl WeatherManager {
                 tracing::info!("Starting background weather generation");
                 self.start_background_generation(timestamp);
             }
-        }
-
-        // 保存当前天气到历史
-        self.history.push(self.current_weather.clone());
-
-        // 保留最近30天的历史
-        if self.history.len() > 30 {
-            self.history.remove(0);
         }
     }
 
