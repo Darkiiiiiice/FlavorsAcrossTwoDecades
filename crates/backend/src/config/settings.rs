@@ -66,7 +66,7 @@ pub struct DatabaseConfig {
 /// LLM 配置
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct LlmConfig {
-    /// LLM 提供者
+    /// LLM 提供者 (ollama, minimax)
     #[serde(default = "default_provider")]
     pub provider: String,
     /// 模型名称
@@ -78,6 +78,9 @@ pub struct LlmConfig {
     /// 端口号
     #[serde(default = "default_port")]
     pub port: u16,
+    /// API Key (用于 MiniMax 等云服务)
+    #[serde(default)]
+    pub api_key: String,
     /// 超时时间（秒)
     #[serde(default = "default_timeout_seconds")]
     pub timeout_seconds: u64,
