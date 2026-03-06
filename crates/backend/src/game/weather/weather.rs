@@ -472,7 +472,7 @@ async fn generate_weather_with_llm_standalone(
         .enumerate()
         .map(|(i, w)| {
             format!(
-                "{}秒前: {}，{:.1}°C",
+                "{}分钟前: {}，{:.1}°C",
                 i,
                 w.weather_type.name(),
                 w.temperature
@@ -628,6 +628,19 @@ impl WeatherManager {
 
     /// 更新天气（每秒调用）
     pub async fn update_weather(&mut self, timestamp: i64) {
+        let weather_repo = WeatherRepository::new(self.db_pool.pool().clone());
+        if self.history.len() == 0 {
+            tracing::info!("Updating weather history from database...");
+            let latest_weather = weather_repo.find_newest(7).await;
+            if let Ok(mut latest_weathers) = latest_weather {
+                latest_weathers.reverse();
+                for weather in latest_weathers {
+                    tracing::info!("Adding weather: {:?}", weather);
+                    self.history.push(weather.into());
+                }
+            }
+        }
+
         // 1. 检查后台生成任务是否完成
         if let Some(task) = self.generation_task.take() {
             if task.is_finished() {
@@ -641,7 +654,6 @@ impl WeatherManager {
                         );
 
                         // 保存到数据库
-                        let weather_repo = WeatherRepository::new(self.db_pool.pool().clone());
                         if let Err(e) = weather_repo.create(&new_weather.clone().into()).await {
                             tracing::error!("Failed to save new weather: {:?}", e);
                         } else {

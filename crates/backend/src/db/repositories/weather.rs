@@ -58,10 +58,23 @@ impl WeatherRepository {
         }
     }
 
+    pub async fn find_newest(&self, limit: i32) -> GameResult<Vec<Weather>> {
+        let rows = sqlx::query_as::<_, WeatherRow>(
+            r#"SELECT id, type, temperature, duration, created_at
+               FROM weather ORDER BY id DESC limit ?"#,
+        )
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
+
+        rows.into_iter().map(|r| r.into_weather()).collect()
+    }
+
     pub async fn find_all(&self) -> GameResult<Vec<Weather>> {
         let rows = sqlx::query_as::<_, WeatherRow>(
             r#"SELECT id, type, temperature, duration, created_at
-               FROM weather ORDER BY created_at DESC"#,
+               FROM weather ORDER BY id DESC"#,
         )
         .fetch_all(&self.pool)
         .await
@@ -74,7 +87,7 @@ impl WeatherRepository {
     pub async fn find_latest(&self) -> GameResult<Option<Weather>> {
         let row = sqlx::query_as::<_, WeatherRow>(
             r#"SELECT id, type, temperature, duration, created_at
-               FROM weather ORDER BY created_at DESC LIMIT 1"#,
+               FROM weather ORDER BY id DESC LIMIT 1"#,
         )
         .fetch_optional(&self.pool)
         .await
