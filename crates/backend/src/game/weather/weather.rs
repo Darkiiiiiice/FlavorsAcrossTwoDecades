@@ -489,7 +489,8 @@ async fn generate_weather_with_llm_standalone(
     let system_prompt = builder.build_system_prompt();
     let user_message = builder.build_user_message();
 
-    tracing::info!("generating weather prompt: \n{}", user_message);
+    tracing::info!("generating weather system prompt: \n{}", system_prompt);
+    tracing::info!("generating weather user prompt: \n{}", user_message);
 
     let response = llm_manager
         .generate_text(system_prompt.to_string(), user_message)
