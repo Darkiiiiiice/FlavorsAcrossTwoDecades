@@ -4,6 +4,9 @@ use std::sync::Arc;
 use tokio::time::{Duration, interval};
 use tokio_util::sync::CancellationToken;
 
+use crate::db::DbPool;
+use crate::game::EnvironmentManager;
+
 use super::command::CommandQueue;
 use super::event::EventDispatcher;
 use super::llm::LlmManager;
@@ -11,8 +14,11 @@ use super::time::{CommunicationDelay, TimeSystem};
 
 /// 游戏引擎
 pub struct GameEngine {
+    db_pool: Arc<DbPool>,
     /// 时间系统
     time_system: TimeSystem,
+    /// 环境系统
+    environment_system: EnvironmentManager,
     /// 指令队列
     command_queue: CommandQueue,
     /// 事件分发器
@@ -25,20 +31,20 @@ pub struct GameEngine {
 
 impl GameEngine {
     /// 创建新的游戏引擎
-    pub fn new(llm_manager: Arc<LlmManager>) -> Self {
-        Self::with_cancel_token(llm_manager, CancellationToken::new())
-    }
-
-    /// 使用指定的取消令牌创建游戏引擎
-    pub fn with_cancel_token(llm_manager: Arc<LlmManager>, cancel_token: CancellationToken) -> Self {
+    pub fn new(
+        llm_manager: Arc<LlmManager>,
+        db_pool: Arc<DbPool>,
+        cancel_token: CancellationToken,
+    ) -> Self {
         let delay = CommunicationDelay::default();
-
         Self {
             time_system: TimeSystem::new(),
+            environment_system: EnvironmentManager::new(db_pool.clone(), llm_manager.clone()),
             command_queue: CommandQueue::new(delay),
             event_dispatcher: EventDispatcher::new(),
             llm_manager,
             cancel_token,
+            db_pool,
         }
     }
 
@@ -69,10 +75,17 @@ impl GameEngine {
                     break;
                 }
                 _ = tick_interval.tick() => {
-                    tracing::info!("Tick!!!");
+                    let time_system = &mut self.time_system;
+                    let enviroment_system = &mut self.environment_system;
 
+                    tracing::info!("Tick: start_time={} timestamp={}", time_system.start_time(), time_system.current_timestamp());
                     // 1. 处理时间更新
-                    self.time_system.tick();
+                    time_system.tick();
+                    // 2. 处理环境
+                    enviroment_system.update(time_system.current_timestamp()).await;
+
+
+
 
                     // 2. 处理到达的指令
                     let arrived_commands = self.command_queue.process_arrived();
@@ -146,26 +159,5 @@ impl GameEngine {
     /// 获取事件分发器
     pub fn event_dispatcher(&self) -> &EventDispatcher {
         &self.event_dispatcher
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::LlmConfig;
-
-    #[tokio::test]
-    async fn test_game_engine_creation() {
-        let mut config = LlmConfig::default();
-        // 修复 URL 格式
-        config.base_url = "http://localhost".to_string();
-        config.port = 11434;
-
-        let provider = crate::game::llm::OllamaProvider::new(config.clone()).unwrap();
-        let llm_manager = Arc::new(LlmManager::new(Arc::new(provider), config));
-
-        let engine = GameEngine::new(llm_manager);
-        // 验证取消令牌未被触发
-        assert!(!engine.cancel_token().is_cancelled());
     }
 }

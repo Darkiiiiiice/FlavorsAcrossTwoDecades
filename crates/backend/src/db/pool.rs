@@ -81,6 +81,7 @@ fn create_empty_database(db_path: &str) -> GameResult<()> {
 }
 
 /// 数据库连接池
+#[derive(Debug)]
 pub struct DbPool {
     pool: SqlitePool,
 }
@@ -125,6 +126,7 @@ impl DbPool {
                 if statement.is_empty() {
                     continue;
                 }
+                tracing::info!("Statement {statement}");
 
                 if let Err(e) = sqlx::query(statement).execute(self.pool()).await {
                     // 忽略"表已存在"等重复执行错误

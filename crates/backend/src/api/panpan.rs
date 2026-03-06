@@ -1,13 +1,9 @@
 //! 盼盼机器人 API 模块
 
-use axum::{
-    Json,
-    extract::{Path, State},
-};
+use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::db::models::panpan::PanpanState;
 use crate::db::repositories::panpan::PanpanRepository;
@@ -30,8 +26,6 @@ pub struct UpdatePanpanRequest {
 /// 盼盼状态响应
 #[derive(Debug, Serialize, ToSchema)]
 pub struct PanpanResponse {
-    /// 存档 ID
-    pub save_id: String,
     /// 名称
     pub name: String,
     /// 型号
@@ -61,7 +55,6 @@ impl PanpanResponse {
         let personality_json =
             serde_json::to_string(&state.personality).unwrap_or_else(|_| "{}".to_string());
         Self {
-            save_id: state.save_id.to_string(),
             name: state.name,
             model: state.model,
             manufacture_date: state.manufacture_date.to_rfc3339(),
@@ -80,32 +73,19 @@ impl PanpanResponse {
 /// 获取盼盼状态
 #[utoipa::path(
     get,
-    path = "/api/v1/saves/{save_id}/panpan",
+    path = "/api/v1/panpan",
     tag = "panpan",
-    params(
-        ("save_id" = String, Path, description = "存档 ID")
-    ),
     responses(
         (status = 200, description = "获取盼盼状态成功", body = PanpanResponse),
         (status = 404, description = "盼盼状态不存在")
     )
 )]
-pub async fn get_panpan(
-    State(state): State<Arc<AppState>>,
-    Path(save_id): Path<String>,
-) -> GameResult<Json<PanpanResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid UUID: {}", e),
-    })?;
-
+pub async fn get_panpan(State(state): State<Arc<AppState>>) -> GameResult<Json<PanpanResponse>> {
     let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let panpan = repo
-        .find_by_save_id(save_id)
-        .await?
-        .ok_or_else(|| GameError::NotFound {
-            entity_type: "PanpanState".to_string(),
-            entity_id: save_id.to_string(),
-        })?;
+    let panpan = repo.get().await?.ok_or_else(|| GameError::NotFound {
+        entity_type: "PanpanState".to_string(),
+        entity_id: "current".to_string(),
+    })?;
 
     Ok(Json(PanpanResponse::from_state(panpan)))
 }
@@ -113,11 +93,8 @@ pub async fn get_panpan(
 /// 更新盼盼状态
 #[utoipa::path(
     patch,
-    path = "/api/v1/saves/{save_id}/panpan",
+    path = "/api/v1/panpan",
     tag = "panpan",
-    params(
-        ("save_id" = String, Path, description = "存档 ID")
-    ),
     request_body = UpdatePanpanRequest,
     responses(
         (status = 200, description = "更新成功", body = PanpanResponse),
@@ -126,21 +103,13 @@ pub async fn get_panpan(
 )]
 pub async fn update_panpan(
     State(state): State<Arc<AppState>>,
-    Path(save_id): Path<String>,
     Json(payload): Json<UpdatePanpanRequest>,
 ) -> GameResult<Json<PanpanResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid UUID: {}", e),
-    })?;
-
     let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let mut panpan = repo
-        .find_by_save_id(save_id)
-        .await?
-        .ok_or_else(|| GameError::NotFound {
-            entity_type: "PanpanState".to_string(),
-            entity_id: save_id.to_string(),
-        })?;
+    let mut panpan = repo.get().await?.ok_or_else(|| GameError::NotFound {
+        entity_type: "PanpanState".to_string(),
+        entity_id: "current".to_string(),
+    })?;
 
     if let Some(trust_level) = payload.trust_level {
         panpan.trust_level = trust_level;

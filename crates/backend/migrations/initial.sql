@@ -1,155 +1,154 @@
--- 002_phase4_schema.sql
--- Phase 4: 细粒度数据模型 Schema
+-- 001_initial.sql
+-- 初始化数据库表结构
+--
+-- ========== 天气数据表 ==========
+CREATE TABLE IF NOT EXISTS weather (
+    id INTEGER PRIMARY KEY,
+    type INTEGER NOT NULL,
+    temperature REAL NOT NULL,
+    duration INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+-- ========== 游戏元数据表 ==========
+CREATE TABLE IF NOT EXISTS game_metadata (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    name TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
 
 -- ========== 盼盼状态表 ==========
 CREATE TABLE IF NOT EXISTS panpan_states (
-    save_id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL,
     model TEXT NOT NULL,
     manufacture_date TEXT NOT NULL,
-    personality TEXT NOT NULL,          -- JSON: Personality
+    personality TEXT NOT NULL,
     trust_level INTEGER NOT NULL,
     emotion TEXT NOT NULL,
     energy_current INTEGER NOT NULL,
     energy_max INTEGER NOT NULL,
     location TEXT NOT NULL,
     current_state TEXT NOT NULL,
-    current_task TEXT,                  -- JSON: Option<Task>
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    current_task TEXT
 );
 
 -- ========== 模块表 ==========
 CREATE TABLE IF NOT EXISTS modules (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     module_type TEXT NOT NULL,
     level INTEGER NOT NULL,
     condition INTEGER NOT NULL,
     experience INTEGER NOT NULL,
-    is_functional INTEGER NOT NULL,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    is_functional INTEGER NOT NULL
 );
 
 -- ========== 小馆状态表 ==========
 CREATE TABLE IF NOT EXISTS shop_states (
-    save_id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL,
     funds INTEGER NOT NULL,
     reputation REAL NOT NULL,
     restaurant_level INTEGER NOT NULL,
     kitchen_level INTEGER NOT NULL,
     backyard_level INTEGER NOT NULL,
-    workshop_level INTEGER NOT NULL,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    workshop_level INTEGER NOT NULL
 );
 
 -- ========== 设施表 ==========
 CREATE TABLE IF NOT EXISTS facilities (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     zone TEXT NOT NULL,
     name TEXT NOT NULL,
     level INTEGER NOT NULL,
     condition INTEGER NOT NULL,
-    upgrade_progress TEXT,              -- JSON: Option<UpgradeProgress>
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    upgrade_progress TEXT
 );
 
 -- ========== 菜地表 ==========
 CREATE TABLE IF NOT EXISTS garden_plots (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     plot_number INTEGER NOT NULL,
     is_unlocked INTEGER NOT NULL,
-    current_crop TEXT,                  -- JSON: Option<CropState>
+    current_crop TEXT,
     fertility INTEGER NOT NULL,
-    moisture INTEGER NOT NULL,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    moisture INTEGER NOT NULL
 );
 
 -- ========== 旅行表 ==========
 CREATE TABLE IF NOT EXISTS travels (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     destination TEXT NOT NULL,
     started_at TEXT NOT NULL,
     expected_return TEXT NOT NULL,
     status TEXT NOT NULL,
-    rewards TEXT,                       -- JSON: Option<TravelReward>
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    rewards TEXT
 );
 
 -- ========== 记忆碎片表 ==========
 CREATE TABLE IF NOT EXISTS memory_fragments (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     fragment_type TEXT NOT NULL,
     title TEXT NOT NULL,
     content TEXT NOT NULL,
     is_unlocked INTEGER NOT NULL,
     unlocked_at TEXT,
-    trigger_condition TEXT NOT NULL,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    trigger_condition TEXT NOT NULL
 );
 
 -- ========== 菜谱表 ==========
 CREATE TABLE IF NOT EXISTS recipes (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     name TEXT NOT NULL,
     category TEXT NOT NULL,
     status TEXT NOT NULL,
-    ingredients TEXT NOT NULL,          -- JSON: Vec<IngredientAmount>
+    ingredients TEXT NOT NULL,
     source TEXT NOT NULL,
-    unlock_condition TEXT,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    unlock_condition TEXT
 );
 
 -- ========== 顾客记录表 ==========
 CREATE TABLE IF NOT EXISTS customers (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     customer_type TEXT NOT NULL,
     name TEXT NOT NULL,
     favorability INTEGER NOT NULL,
     visit_count INTEGER NOT NULL,
     last_visit TEXT NOT NULL,
-    preferences TEXT NOT NULL,          -- JSON: Vec<String>
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    preferences TEXT NOT NULL
 );
 
 -- ========== 指令表 ==========
 CREATE TABLE IF NOT EXISTS commands (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     content TEXT NOT NULL,
     created_at TEXT NOT NULL,
     arrival_time TEXT NOT NULL,
     status TEXT NOT NULL,
-    result TEXT,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    result TEXT
 );
 
 -- ========== 对话表 ==========
 CREATE TABLE IF NOT EXISTS dialogues (
     id TEXT PRIMARY KEY,
-    save_id TEXT NOT NULL,
     sender TEXT NOT NULL,
     content TEXT NOT NULL,
     timestamp TEXT NOT NULL,
     message_type TEXT NOT NULL,
-    status TEXT NOT NULL,
-    FOREIGN KEY (save_id) REFERENCES saves(id) ON DELETE CASCADE
+    status TEXT NOT NULL
 );
 
--- ========== 创建索引 ==========
-CREATE INDEX IF NOT EXISTS idx_modules_save ON modules(save_id);
-CREATE INDEX IF NOT EXISTS idx_facilities_save ON facilities(save_id);
-CREATE INDEX IF NOT EXISTS idx_garden_plots_save ON garden_plots(save_id);
-CREATE INDEX IF NOT EXISTS idx_travels_save ON travels(save_id);
-CREATE INDEX IF NOT EXISTS idx_memory_fragments_save ON memory_fragments(save_id);
-CREATE INDEX IF NOT EXISTS idx_recipes_save ON recipes(save_id);
-CREATE INDEX IF NOT EXISTS idx_customers_save ON customers(save_id);
-CREATE INDEX IF NOT EXISTS idx_commands_save ON commands(save_id);
+-- ========== 游戏配置表 ==========
+CREATE TABLE IF NOT EXISTS game_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    updated_at TEXT NOT NULL
+);
+
+-- ========== 索引 ==========
 CREATE INDEX IF NOT EXISTS idx_commands_arrival ON commands(arrival_time);
-CREATE INDEX IF NOT EXISTS idx_dialogues_save ON dialogues(save_id);
+CREATE INDEX IF NOT EXISTS idx_garden_plots_number ON garden_plots(plot_number);

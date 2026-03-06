@@ -10,6 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Recipe collection through travel and experimentation
 - Memory fragment recovery system
 
+## Runtime Dependencies
+
+- **sqlite3**: Required for database creation (auto-creates DB file if missing)
+- **Ollama**: LLM service for AI responses (must be running at configured URL)
+
 ## Build Commands
 
 ```bash
@@ -52,11 +57,27 @@ crates/
 ```
 
 ### Backend Modules
-- **api/**: HTTP endpoints (health, saves, websocket)
+- **api/**: HTTP endpoints, WebSocket, OpenAPI docs
 - **config/**: Settings loaded from TOML files with env override
 - **db/**: SQLite database with embedded migrations and seed data
+  - `models/`: Data structures for database records
+  - `repositories/`: Data access layer (one repo per domain)
 - **game/**: Core game state and logic
 - **error.rs**: Unified error handling with thiserror
+
+### Game Subsystems (game/)
+- **engine**: Main game loop with tick-based updates
+- **time**: Game time system with communication delay simulation
+- **weather**: Weather effects and holiday system
+- **garden**: Crop planting, growth, and harvesting
+- **recipe**: Recipe management and cooking experiments
+- **customer**: Customer generation, orders, and reviews
+- **shop**: Restaurant finances, facilities, and reputation
+- **travel**: Panpan's travel to destinations for recipe collection
+- **memory**: Memory fragment unlock and recovery
+- **panpan**: AI robot state, modules, and personality
+- **neighbor**: NPC interactions and relationships
+- **llm**: Ollama integration for AI decisions and dialogues
 
 ### Key Design Decisions
 
@@ -68,6 +89,24 @@ crates/
 
 4. **Configuration Priority**: Config file < Environment variables (prefix: `FLAVORS__`)
 
+5. **Graceful Shutdown**: Uses `CancellationToken` for coordinated shutdown of GameEngine and HTTP server on Ctrl+C.
+
+## API Endpoints (REST, /api/v1)
+
+- **Health**: `/health`, `/health/ready`, `/health/live`
+- **WebSocket**: `/ws`
+- **Commands**: `/commands` (CRUD + send)
+- **Dialogues**: `/dialogues` (history + send message)
+- **Recipes**: `/recipes` (CRUD + status update)
+- **Customers**: `/customers` (list, get, update, delete)
+- **Memories**: `/memories` (list, get, unlock)
+- **Panpan**: `/panpan` (get, update)
+- **Garden**: `/garden/plots` (list, get, plant, water, harvest)
+- **Shop**: `/shop`, `/shop/purchase`, `/shop/funds`
+- **Travel**: `/travels` (CRUD + start/complete)
+
+Swagger UI available at `/swagger-ui/` when server is running.
+
 ## Configuration
 
 Default config at `crates/backend/config/default.toml`:
@@ -76,11 +115,11 @@ Default config at `crates/backend/config/default.toml`:
 - LLM: Ollama provider, model name, base URL
 - Game: communication delay range, auto-save interval
 
-## Database
+## Database Schema
 
-- Tables: `saves`, `player_configs`, `event_logs`, `game_config`
-- Migrations: `crates/backend/migrations/`
-- Seed data: 11 default game config entries initialized on first run
+Tables: `weather`, `game_metadata`, `panpan_states`, `modules`, `shop_states`, `facilities`, `garden_plots`, `travels`, `memory_fragments`, `recipes`, `customers`, `commands`, `dialogues`, `game_config`
+
+Migrations are defined in `crates/backend/migrations/` and embedded via `db/migrations.rs`.
 
 ## Error Handling
 

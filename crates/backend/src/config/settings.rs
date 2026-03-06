@@ -97,7 +97,7 @@ fn default_provider() -> String {
 }
 
 fn default_model() -> String {
-    "qwen3:4".to_string()
+    "qwen3:4b".to_string()
 }
 
 fn default_base_url() -> String {

@@ -9,7 +9,7 @@ url = "sqlite:/var/lib/flavors-game/flavors_game.db?mode=rwc"
 
 [llm]
 provider = "ollama"
-model = "qwen3:1.7b"
+model = "qwen3:4b"
 base_url = "http://localhost:11434"
 timeout_seconds = 120
 max_retries = 5

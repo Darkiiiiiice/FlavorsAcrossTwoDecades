@@ -7,18 +7,25 @@ pub struct TimeSystem {
     /// 地球时区（东八区）
     earth_timezone: FixedOffset,
     /// 测试模式加速倍率（正常为1，测试时可设为10）
-    time_scale: u32,
+    time_scale: i64,
     /// 是否启用加速模式
     accelerated_mode: bool,
+    /// 游戏开始时间
+    start_time: i64,
+    /// 游戏内地球时间
+    timestamp: i64,
 }
 
 impl TimeSystem {
     /// 创建新的时间系统
     pub fn new() -> Self {
+        let now = Utc::now().timestamp();
         Self {
             earth_timezone: FixedOffset::east_opt(8 * 3600).unwrap(), // UTC+8
             time_scale: 1,
             accelerated_mode: false,
+            start_time: now,
+            timestamp: now,
         }
     }
 
@@ -38,10 +45,25 @@ impl TimeSystem {
         real_seconds * self.time_scale as u64
     }
 
+    /// 获取时间系统的起始时间戳
+    pub fn start_time(&self) -> i64 {
+        self.start_time
+    }
+
+    /// 获取当前时间戳
+    pub fn current_timestamp(&self) -> i64 {
+        self.timestamp
+    }
+
     /// 每帧更新
     pub fn tick(&mut self) {
         // 时间系统的tick可以用于更新内部状态
         // 目前暂时为空，未来可以添加更多逻辑
+        if self.accelerated_mode {
+            self.timestamp += self.time_scale;
+        } else {
+            self.timestamp += 1;
+        }
     }
 }
 

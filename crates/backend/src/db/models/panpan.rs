@@ -2,15 +2,12 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::game::panpan::{Emotion, Module, Personality};
 
 /// 盼盼状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanpanState {
-    /// 关联的存档ID
-    pub save_id: Uuid,
     /// 名称
     pub name: String,
     /// 型号
@@ -37,9 +34,8 @@ pub struct PanpanState {
 
 impl PanpanState {
     /// 创建新的盼盼状态
-    pub fn new(save_id: Uuid) -> Self {
+    pub fn new() -> Self {
         Self {
-            save_id,
             name: "盼盼".to_string(),
             model: "PP-X1".to_string(),
             manufacture_date: Utc::now(),
@@ -55,13 +51,17 @@ impl PanpanState {
     }
 }
 
+impl Default for PanpanState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 模块状态（用于数据库存储）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModuleRecord {
     /// 模块ID
-    pub id: Uuid,
-    /// 关联的存档ID
-    pub save_id: Uuid,
+    pub id: String,
     /// 模块类型
     pub module_type: String,
     /// 等级
@@ -76,7 +76,7 @@ pub struct ModuleRecord {
 
 impl ModuleRecord {
     /// 从 Module 创建记录
-    pub fn from_module(module: &Module, save_id: Uuid) -> Self {
+    pub fn from_module(module: &Module) -> Self {
         use crate::game::panpan::ModuleType;
 
         let module_type = match module.module_type {
@@ -90,8 +90,7 @@ impl ModuleRecord {
         };
 
         Self {
-            id: Uuid::new_v4(),
-            save_id,
+            id: uuid::Uuid::new_v4().to_string(),
             module_type: module_type.to_string(),
             level: module.level,
             condition: module.condition,

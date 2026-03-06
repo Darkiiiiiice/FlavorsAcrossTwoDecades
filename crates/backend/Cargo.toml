@@ -67,3 +67,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 
 [dev-dependencies]
+
+[profile.dev]
+debug = "full"
+limit =  true

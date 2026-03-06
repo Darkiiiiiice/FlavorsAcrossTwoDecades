@@ -2,7 +2,6 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
-use uuid::Uuid;
 
 use crate::db::models::panpan::{ModuleRecord, PanpanState};
 use crate::error::{DatabaseError, GameError, GameResult};
@@ -19,6 +18,23 @@ impl PanpanRepository {
         Self { pool }
     }
 
+    /// 获取盼盼状态（单例）
+    pub async fn get(&self) -> GameResult<Option<PanpanState>> {
+        let row = sqlx::query_as::<_, PanpanStateRow>(
+            r#"SELECT name, model, manufacture_date, personality, trust_level,
+               emotion, energy_current, energy_max, location, current_state, current_task
+               FROM panpan_states WHERE id = 1"#,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
+
+        match row {
+            Some(r) => Ok(Some(r.into_state()?)),
+            None => Ok(None),
+        }
+    }
+
     /// 创建盼盼状态
     pub async fn create(&self, state: &PanpanState) -> GameResult<()> {
         let personality_json =
@@ -27,11 +43,10 @@ impl PanpanRepository {
             })?;
 
         sqlx::query(
-            r#"INSERT INTO panpan_states (save_id, name, model, manufacture_date, personality,
+            r#"INSERT INTO panpan_states (id, name, model, manufacture_date, personality,
                trust_level, emotion, energy_current, energy_max, location, current_state, current_task)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
+               VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
         )
-        .bind(state.save_id.to_string())
         .bind(&state.name)
         .bind(&state.model)
         .bind(state.manufacture_date.to_rfc3339())
@@ -48,24 +63,6 @@ impl PanpanRepository {
         .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
 
         Ok(())
-    }
-
-    /// 根据存档ID查找盼盼状态
-    pub async fn find_by_save_id(&self, save_id: Uuid) -> GameResult<Option<PanpanState>> {
-        let row = sqlx::query_as::<_, PanpanStateRow>(
-            r#"SELECT save_id, name, model, manufacture_date, personality, trust_level,
-               emotion, energy_current, energy_max, location, current_state, current_task
-               FROM panpan_states WHERE save_id = ?"#,
-        )
-        .bind(save_id.to_string())
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
-
-        match row {
-            Some(r) => Ok(Some(r.into_state()?)),
-            None => Ok(None),
-        }
     }
 
     /// 更新盼盼状态
@@ -79,7 +76,7 @@ impl PanpanRepository {
             r#"UPDATE panpan_states SET name = ?, model = ?, manufacture_date = ?,
                personality = ?, trust_level = ?, emotion = ?, energy_current = ?,
                energy_max = ?, location = ?, current_state = ?, current_task = ?
-               WHERE save_id = ?"#,
+               WHERE id = 1"#,
         )
         .bind(&state.name)
         .bind(&state.model)
@@ -92,7 +89,6 @@ impl PanpanRepository {
         .bind(&state.location)
         .bind(&state.current_state)
         .bind(&state.current_task)
-        .bind(state.save_id.to_string())
         .execute(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
@@ -102,7 +98,7 @@ impl PanpanRepository {
 
     /// 创建或更新盼盼状态
     pub async fn upsert(&self, state: &PanpanState) -> GameResult<()> {
-        let existing = self.find_by_save_id(state.save_id).await?;
+        let existing = self.get().await?;
         if existing.is_some() {
             self.update(state).await
         } else {
@@ -115,11 +111,10 @@ impl PanpanRepository {
     /// 创建模块记录
     pub async fn create_module(&self, module: &ModuleRecord) -> GameResult<()> {
         sqlx::query(
-            r#"INSERT INTO modules (id, save_id, module_type, level, condition, experience, is_functional)
-               VALUES (?, ?, ?, ?, ?, ?, ?)"#
+            r#"INSERT INTO modules (id, module_type, level, condition, experience, is_functional)
+               VALUES (?, ?, ?, ?, ?, ?)"#,
         )
-        .bind(module.id.to_string())
-        .bind(module.save_id.to_string())
+        .bind(&module.id)
         .bind(&module.module_type)
         .bind(module.level as i64)
         .bind(module.condition as i64)
@@ -132,13 +127,12 @@ impl PanpanRepository {
         Ok(())
     }
 
-    /// 获取存档的所有模块
-    pub async fn find_modules(&self, save_id: Uuid) -> GameResult<Vec<ModuleRecord>> {
+    /// 获取所有模块
+    pub async fn find_modules(&self) -> GameResult<Vec<ModuleRecord>> {
         let rows = sqlx::query_as::<_, ModuleRow>(
-            r#"SELECT id, save_id, module_type, level, condition, experience, is_functional
-               FROM modules WHERE save_id = ?"#,
+            r#"SELECT id, module_type, level, condition, experience, is_functional
+               FROM modules"#,
         )
-        .bind(save_id.to_string())
         .fetch_all(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
@@ -158,7 +152,7 @@ impl PanpanRepository {
         .bind(module.condition as i64)
         .bind(module.experience as i64)
         .bind(module.is_functional as i64)
-        .bind(module.id.to_string())
+        .bind(&module.id)
         .execute(&self.pool)
         .await
         .map_err(|e| GameError::Database(DatabaseError::WriteFailed(e.to_string())))?;
@@ -201,7 +195,6 @@ fn string_to_emotion(s: &str) -> GameResult<Emotion> {
 /// 盼盼状态数据库行
 #[derive(sqlx::FromRow)]
 struct PanpanStateRow {
-    save_id: String,
     name: String,
     model: String,
     manufacture_date: String,
@@ -217,10 +210,6 @@ struct PanpanStateRow {
 
 impl PanpanStateRow {
     fn into_state(self) -> GameResult<PanpanState> {
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        })?;
-
         let manufacture_date = DateTime::parse_from_rfc3339(&self.manufacture_date)
             .map_err(|e| GameError::Validation {
                 details: format!("Invalid manufacture_date: {}", e),
@@ -235,7 +224,6 @@ impl PanpanStateRow {
         let emotion = string_to_emotion(&self.emotion)?;
 
         Ok(PanpanState {
-            save_id,
             name: self.name,
             model: self.model,
             manufacture_date,
@@ -255,7 +243,6 @@ impl PanpanStateRow {
 #[derive(sqlx::FromRow)]
 struct ModuleRow {
     id: String,
-    save_id: String,
     module_type: String,
     level: i64,
     condition: i64,
@@ -265,17 +252,8 @@ struct ModuleRow {
 
 impl ModuleRow {
     fn into_module_record(self) -> GameResult<ModuleRecord> {
-        let id = Uuid::parse_str(&self.id).map_err(|e| GameError::Validation {
-            details: format!("Invalid UUID: {}", e),
-        })?;
-
-        let save_id = Uuid::parse_str(&self.save_id).map_err(|e| GameError::Validation {
-            details: format!("Invalid save_id UUID: {}", e),
-        })?;
-
         Ok(ModuleRecord {
-            id,
-            save_id,
+            id: self.id,
             module_type: self.module_type,
             level: self.level as u32,
             condition: self.condition as u32,

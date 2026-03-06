@@ -4,7 +4,6 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::api::health::*;
-use crate::api::saves::*;
 
 /// OpenAPI 文档定义
 #[derive(OpenApi)]
@@ -19,24 +18,15 @@ use crate::api::saves::*;
         health_check,
         readiness_check,
         liveness_check,
-        list_saves,
-        create_save,
-        get_save,
-        delete_save,
     ),
     components(schemas(
         HealthStatus,
         ComponentHealth,
         ComponentsHealth,
         HealthResponse,
-        SaveInfo,
-        CreateSaveRequest,
-        CreateSaveResponse,
-        SaveListResponse,
     )),
     tags(
         (name = "health", description = "健康检查 API"),
-        (name = "saves", description = "存档管理 API"),
     )
 )]
 pub struct ApiDoc;

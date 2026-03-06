@@ -7,7 +7,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 use crate::db::models::garden::GardenPlot;
 use crate::db::repositories::garden::GardenRepository;
@@ -33,8 +32,6 @@ pub struct WaterRequest {
 pub struct PlotResponse {
     /// 地块 ID
     pub id: String,
-    /// 存档 ID
-    pub save_id: String,
     /// 地块编号
     pub plot_number: u32,
     /// 是否已解锁
@@ -50,8 +47,7 @@ pub struct PlotResponse {
 impl From<GardenPlot> for PlotResponse {
     fn from(plot: GardenPlot) -> Self {
         Self {
-            id: plot.id.to_string(),
-            save_id: plot.save_id.to_string(),
+            id: plot.id,
             plot_number: plot.plot_number,
             is_unlocked: plot.is_unlocked,
             current_crop: plot.current_crop,
@@ -73,25 +69,15 @@ pub struct PlotListResponse {
 /// 获取菜园地块列表
 #[utoipa::path(
     get,
-    path = "/api/v1/saves/{save_id}/garden/plots",
+    path = "/api/v1/garden/plots",
     tag = "garden",
-    params(
-        ("save_id" = String, Path, description = "存档 ID")
-    ),
     responses(
         (status = 200, description = "获取地块列表成功", body = PlotListResponse)
     )
 )]
-pub async fn list_plots(
-    State(state): State<Arc<AppState>>,
-    Path(save_id): Path<String>,
-) -> GameResult<Json<PlotListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid UUID: {}", e),
-    })?;
-
+pub async fn list_plots(State(state): State<Arc<AppState>>) -> GameResult<Json<PlotListResponse>> {
     let repo = GardenRepository::new(state.db_pool.pool().clone());
-    let plots = repo.find_by_save_id(save_id).await?;
+    let plots = repo.find_all().await?;
 
     let plot_responses: Vec<PlotResponse> = plots.into_iter().map(PlotResponse::from).collect();
 
@@ -104,10 +90,9 @@ pub async fn list_plots(
 /// 获取地块详情
 #[utoipa::path(
     get,
-    path = "/api/v1/saves/{save_id}/garden/plots/{plot_id}",
+    path = "/api/v1/garden/plots/{plot_id}",
     tag = "garden",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
         ("plot_id" = String, Path, description = "地块 ID")
     ),
     responses(
@@ -117,19 +102,15 @@ pub async fn list_plots(
 )]
 pub async fn get_plot(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, plot_id)): Path<(String, String)>,
+    Path(plot_id): Path<String>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid plot_id UUID: {}", e),
-    })?;
-
     let repo = GardenRepository::new(state.db_pool.pool().clone());
     let plot = repo
-        .find_by_id(plot_id)
+        .find_by_id(&plot_id)
         .await?
         .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
-            entity_id: plot_id.to_string(),
+            entity_id: plot_id,
         })?;
 
     Ok(Json(PlotResponse::from(plot)))
@@ -138,10 +119,9 @@ pub async fn get_plot(
 /// 种植作物
 #[utoipa::path(
     post,
-    path = "/api/v1/saves/{save_id}/garden/plots/{plot_id}/plant",
+    path = "/api/v1/garden/plots/{plot_id}/plant",
     tag = "garden",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
         ("plot_id" = String, Path, description = "地块 ID")
     ),
     request_body = PlantRequest,
@@ -152,20 +132,16 @@ pub async fn get_plot(
 )]
 pub async fn plant_crop(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, plot_id)): Path<(String, String)>,
+    Path(plot_id): Path<String>,
     Json(payload): Json<PlantRequest>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid plot_id UUID: {}", e),
-    })?;
-
     let repo = GardenRepository::new(state.db_pool.pool().clone());
     let mut plot = repo
-        .find_by_id(plot_id)
+        .find_by_id(&plot_id)
         .await?
         .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
-            entity_id: plot_id.to_string(),
+            entity_id: plot_id,
         })?;
 
     if !plot.is_unlocked {
@@ -196,10 +172,9 @@ pub async fn plant_crop(
 /// 浇水
 #[utoipa::path(
     post,
-    path = "/api/v1/saves/{save_id}/garden/plots/{plot_id}/water",
+    path = "/api/v1/garden/plots/{plot_id}/water",
     tag = "garden",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
         ("plot_id" = String, Path, description = "地块 ID")
     ),
     request_body = WaterRequest,
@@ -210,20 +185,16 @@ pub async fn plant_crop(
 )]
 pub async fn water_plot(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, plot_id)): Path<(String, String)>,
+    Path(plot_id): Path<String>,
     Json(payload): Json<WaterRequest>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid plot_id UUID: {}", e),
-    })?;
-
     let repo = GardenRepository::new(state.db_pool.pool().clone());
     let mut plot = repo
-        .find_by_id(plot_id)
+        .find_by_id(&plot_id)
         .await?
         .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
-            entity_id: plot_id.to_string(),
+            entity_id: plot_id,
         })?;
 
     plot.moisture = (plot.moisture + payload.water_amount).min(100);
@@ -235,10 +206,9 @@ pub async fn water_plot(
 /// 收获作物
 #[utoipa::path(
     post,
-    path = "/api/v1/saves/{save_id}/garden/plots/{plot_id}/harvest",
+    path = "/api/v1/garden/plots/{plot_id}/harvest",
     tag = "garden",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
         ("plot_id" = String, Path, description = "地块 ID")
     ),
     responses(
@@ -248,19 +218,15 @@ pub async fn water_plot(
 )]
 pub async fn harvest_crop(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, plot_id)): Path<(String, String)>,
+    Path(plot_id): Path<String>,
 ) -> GameResult<Json<PlotResponse>> {
-    let plot_id = Uuid::parse_str(&plot_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid plot_id UUID: {}", e),
-    })?;
-
     let repo = GardenRepository::new(state.db_pool.pool().clone());
     let mut plot = repo
-        .find_by_id(plot_id)
+        .find_by_id(&plot_id)
         .await?
         .ok_or_else(|| GameError::NotFound {
             entity_type: "Plot".to_string(),
-            entity_id: plot_id.to_string(),
+            entity_id: plot_id,
         })?;
 
     if plot.current_crop.is_none() {

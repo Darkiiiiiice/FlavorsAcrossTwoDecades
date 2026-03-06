@@ -9,7 +9,7 @@ url = "sqlite:target/debug/flavors_game.db"
 
 [llm]
 provider = "ollama"
-model = "qwen3:1.7b"
+model = "qwen3:4b"
 base_url = "http://localhost:11434"
 timeout_seconds = 60
 max_retries = 3

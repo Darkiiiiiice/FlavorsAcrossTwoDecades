@@ -98,6 +98,9 @@ pub enum DatabaseError {
 
     #[error("数据库损坏")]
     CorruptionDetected,
+
+    #[error("无效数据: {0}")]
+    InvalidData(String),
 }
 
 /// 菜园子系统错误

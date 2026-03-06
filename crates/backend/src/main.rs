@@ -9,54 +9,12 @@ use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use flavors_backend::api::{
-    ApiDoc,
-    complete_travel,
-    // Recipes
-    create_recipe,
-    create_save,
-    delete_customer,
-    delete_save,
-    get_command,
-    get_current_travel,
-    get_customer,
-    get_dialogue_history,
-    get_memory,
-    get_message,
-    // Panpan
-    get_panpan,
-    get_plot,
-    get_recipe,
-    get_save,
-    // Shop
-    get_shop,
-    get_travel,
-    harvest_crop,
-    health_check,
-    list_commands,
-    // Customers
-    list_customers,
-    // Memory
-    list_memories,
-    // Garden
-    list_plots,
-    list_recipes,
-    list_saves,
-    // Travel
-    list_travels,
-    liveness_check,
-    plant_crop,
-    purchase_item,
-    readiness_check,
-    send_command,
-    send_message,
-    start_travel,
-    unlock_memory,
-    update_customer,
-    update_funds,
-    update_panpan,
-    update_recipe_status,
-    water_plot,
-    ws_handler,
+    ApiDoc, complete_travel, create_recipe, delete_customer, get_command, get_current_travel,
+    get_customer, get_dialogue_history, get_memory, get_message, get_panpan, get_plot, get_recipe,
+    get_shop, get_travel, harvest_crop, health_check, list_commands, list_customers, list_memories,
+    list_plots, list_recipes, list_travels, liveness_check, plant_crop, purchase_item,
+    readiness_check, send_command, send_message, start_travel, unlock_memory, update_customer,
+    update_funds, update_panpan, update_recipe_status, water_plot, ws_handler,
 };
 use flavors_backend::config::Settings;
 use flavors_backend::db::DbPool;
@@ -120,7 +78,7 @@ async fn init_database(settings: &Settings) -> Result<Arc<DbPool>> {
 
 /// 创建路由
 fn create_router(state: Arc<AppState>) -> Router {
-    // API 路由
+    // API 路由（每个数据库就是一个存档，不再需要 save_id）
     let api_routes = Router::new()
         // 健康检查
         .route("/health", axum::routing::get(health_check))
@@ -128,118 +86,76 @@ fn create_router(state: Arc<AppState>) -> Router {
         .route("/health/live", axum::routing::get(liveness_check))
         // WebSocket
         .route("/ws", axum::routing::get(ws_handler))
-        // 存档 API
-        .route("/saves", axum::routing::get(list_saves).post(create_save))
-        .route(
-            "/saves/{save_id}",
-            axum::routing::get(get_save).delete(delete_save),
-        )
         // 指令 API
         .route(
-            "/saves/{save_id}/commands",
+            "/commands",
             axum::routing::get(list_commands).post(send_command),
         )
-        .route(
-            "/saves/{save_id}/commands/{command_id}",
-            axum::routing::get(get_command),
-        )
+        .route("/commands/{command_id}", axum::routing::get(get_command))
         // 对话 API
         .route(
-            "/saves/{save_id}/dialogues",
+            "/dialogues",
             axum::routing::get(get_dialogue_history).post(send_message),
         )
-        .route(
-            "/saves/{save_id}/dialogues/{message_id}",
-            axum::routing::get(get_message),
-        )
+        .route("/dialogues/{message_id}", axum::routing::get(get_message))
         // 菜谱 API
         .route(
-            "/saves/{save_id}/recipes",
+            "/recipes",
             axum::routing::get(list_recipes).post(create_recipe),
         )
+        .route("/recipes/{recipe_id}", axum::routing::get(get_recipe))
         .route(
-            "/saves/{save_id}/recipes/{recipe_id}",
-            axum::routing::get(get_recipe),
-        )
-        .route(
-            "/saves/{save_id}/recipes/{recipe_id}/status",
+            "/recipes/{recipe_id}/status",
             axum::routing::patch(update_recipe_status),
         )
         // 顾客 API
+        .route("/customers", axum::routing::get(list_customers))
         .route(
-            "/saves/{save_id}/customers",
-            axum::routing::get(list_customers),
-        )
-        .route(
-            "/saves/{save_id}/customers/{customer_id}",
+            "/customers/{customer_id}",
             axum::routing::get(get_customer)
                 .patch(update_customer)
                 .delete(delete_customer),
         )
         // 记忆碎片 API
+        .route("/memories", axum::routing::get(list_memories))
+        .route("/memories/{memory_id}", axum::routing::get(get_memory))
         .route(
-            "/saves/{save_id}/memories",
-            axum::routing::get(list_memories),
-        )
-        .route(
-            "/saves/{save_id}/memories/{memory_id}",
-            axum::routing::get(get_memory),
-        )
-        .route(
-            "/saves/{save_id}/memories/{memory_id}/unlock",
+            "/memories/{memory_id}/unlock",
             axum::routing::post(unlock_memory),
         )
         // 盼盼状态 API
         .route(
-            "/saves/{save_id}/panpan",
+            "/panpan",
             axum::routing::get(get_panpan).patch(update_panpan),
         )
         // 菜园 API
+        .route("/garden/plots", axum::routing::get(list_plots))
+        .route("/garden/plots/{plot_id}", axum::routing::get(get_plot))
         .route(
-            "/saves/{save_id}/garden/plots",
-            axum::routing::get(list_plots),
-        )
-        .route(
-            "/saves/{save_id}/garden/plots/{plot_id}",
-            axum::routing::get(get_plot),
-        )
-        .route(
-            "/saves/{save_id}/garden/plots/{plot_id}/plant",
+            "/garden/plots/{plot_id}/plant",
             axum::routing::post(plant_crop),
         )
         .route(
-            "/saves/{save_id}/garden/plots/{plot_id}/water",
+            "/garden/plots/{plot_id}/water",
             axum::routing::post(water_plot),
         )
         .route(
-            "/saves/{save_id}/garden/plots/{plot_id}/harvest",
+            "/garden/plots/{plot_id}/harvest",
             axum::routing::post(harvest_crop),
         )
         // 商店 API
-        .route("/saves/{save_id}/shop", axum::routing::get(get_shop))
-        .route(
-            "/saves/{save_id}/shop/purchase",
-            axum::routing::post(purchase_item),
-        )
-        .route(
-            "/saves/{save_id}/shop/funds",
-            axum::routing::patch(update_funds),
-        )
+        .route("/shop", axum::routing::get(get_shop))
+        .route("/shop/purchase", axum::routing::post(purchase_item))
+        .route("/shop/funds", axum::routing::patch(update_funds))
         // 旅行 API
         .route(
-            "/saves/{save_id}/travels",
+            "/travels",
             axum::routing::get(list_travels).post(start_travel),
         )
+        .route("/travels/current", axum::routing::get(get_current_travel))
+        .route("/travels/{travel_id}", axum::routing::get(get_travel))
         .route(
-            "/saves/{save_id}/travels/current",
-            axum::routing::get(get_current_travel),
-        )
-        .route(
-            "/saves/{save_id}/travels/{travel_id}",
-            axum::routing::get(get_travel),
-        )
-        .route(
-            "/saves/{save_id}/travels/{travel_id}/complete",
+            "/travels/{travel_id}/complete",
             axum::routing::post(complete_travel),
         );
 
@@ -275,21 +191,15 @@ async fn main() -> Result<()> {
     // 创建取消令牌（用于优雅退出）
     let cancel_token = CancellationToken::new();
 
-    // 创建游戏引擎（使用共享的取消令牌）
-    let game_engine = Arc::new(GameEngine::with_cancel_token(
-        Arc::clone(&llm_manager),
-        cancel_token.clone(),
-    ));
-
     // 启动游戏引擎（后台运行）
-    let mut engine = GameEngine::with_cancel_token(llm_manager, cancel_token.clone());
+    let mut engine = GameEngine::new(llm_manager, db_pool.clone(), cancel_token.clone());
     let engine_task = tokio::spawn(async move {
         engine.start().await;
     });
     info!("GameEngine started");
 
     // 创建 API 状态
-    let state = Arc::new(AppState::new(db_pool, settings.llm.clone(), game_engine));
+    let state = Arc::new(AppState::new(db_pool, settings.llm.clone()));
 
     // 创建路由
     let app = create_router(state);

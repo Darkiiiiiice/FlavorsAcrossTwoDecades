@@ -70,18 +70,16 @@ pub struct AppState {
     pub start_time: Instant,
     pub health_checker: Arc<HealthChecker>,
     pub llm_config: LlmConfig,
-    pub game_engine: Arc<GameEngine>,
 }
 
 impl AppState {
-    pub fn new(db_pool: Arc<DbPool>, llm_config: LlmConfig, game_engine: Arc<GameEngine>) -> Self {
+    pub fn new(db_pool: Arc<DbPool>, llm_config: LlmConfig) -> Self {
         let health_checker = Arc::new(HealthChecker::new(Arc::clone(&db_pool), llm_config.clone()));
         Self {
             db_pool,
             start_time: Instant::now(),
             health_checker,
             llm_config,
-            game_engine,
         }
     }
 }

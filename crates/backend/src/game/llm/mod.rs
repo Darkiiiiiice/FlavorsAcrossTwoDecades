@@ -12,7 +12,7 @@ pub use context::{MemoryFragment, PanpanContext, PanpanState, ShopSnapshot};
 pub use decision::{Decision, DecisionType};
 pub use ollama::OllamaProvider;
 pub use prompt::PromptTemplates;
-pub use provider::{LlmManager, LlmProvider};
+pub use provider::{Delta, LlmManager, LlmProvider, LlmRequest, LlmResponse};
 
 use crate::config::LlmConfig;
 use crate::error::Result;
