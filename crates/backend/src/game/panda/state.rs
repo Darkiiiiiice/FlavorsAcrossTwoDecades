@@ -1,4 +1,4 @@
-//! 盼盼状态系统
+//! Panda 状态系统
 
 use serde::{Deserialize, Serialize};
 
@@ -149,9 +149,9 @@ impl Emotion {
     }
 }
 
-/// 盼盼完整状态
+/// Panda 完整状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PanpanFullState {
+pub struct PandaFullState {
     /// 当前心情描述
     pub mood: String,
     /// 性格参数
@@ -162,7 +162,7 @@ pub struct PanpanFullState {
     pub recent_failures: u32,
 }
 
-impl Default for PanpanFullState {
+impl Default for PandaFullState {
     fn default() -> Self {
         Self {
             mood: "平静".to_string(),
@@ -173,7 +173,7 @@ impl Default for PanpanFullState {
     }
 }
 
-impl PanpanFullState {
+impl PandaFullState {
     /// 创建新的状态
     pub fn new() -> Self {
         Self::default()

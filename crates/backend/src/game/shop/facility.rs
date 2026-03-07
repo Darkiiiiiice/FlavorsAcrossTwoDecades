@@ -562,7 +562,7 @@ pub struct MaterialCost {
 /// 人员类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PersonnelType {
-    PanpanOnly,
+    PandaOnly,
     NeedElectrician,
     NeedCarpenter,
     NeedHelper,
@@ -621,7 +621,7 @@ impl UpgradePath {
         let (time_days, personnel) = match facility_type {
             FacilityType::Stove | FacilityType::Refrigerator => (2, PersonnelType::NeedElectrician),
             FacilityType::Lighting => (1, PersonnelType::NeedElectrician),
-            _ => (1, PersonnelType::PanpanOnly),
+            _ => (1, PersonnelType::PandaOnly),
         };
 
         Some(UpgradePath {

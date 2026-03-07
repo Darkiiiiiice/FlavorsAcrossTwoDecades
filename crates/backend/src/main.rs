@@ -10,11 +10,11 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use flavors_backend::api::{
     complete_travel, create_recipe, delete_customer, get_command, get_current_travel,
-    get_customer, get_dialogue_history, get_memory, get_message, get_panpan, get_plot, get_recipe,
+    get_customer, get_dialogue_history, get_memory, get_message, get_panda, get_plot, get_recipe,
     get_shop, get_travel, harvest_crop, health_check, list_commands, list_customers, list_memories,
     list_plots, list_recipes, list_travels, liveness_check, plant_crop, purchase_item,
     readiness_check, send_command, send_message, start_travel, unlock_memory, update_customer,
-    update_funds, update_panpan, update_recipe_status, water_plot, ws_handler,
+    update_funds, update_panda, update_recipe_status, water_plot, ws_handler,
 };
 use flavors_backend::config::Settings;
 use flavors_backend::db::DbPool;
@@ -123,10 +123,10 @@ fn create_router(state: Arc<AppState>) -> Router {
             "/memories/{memory_id}/unlock",
             axum::routing::post(unlock_memory),
         )
-        // 盼盼状态 API
+        // Panda 状态 API
         .route(
-            "/panpan",
-            axum::routing::get(get_panpan).patch(update_panpan),
+            "/panda",
+            axum::routing::get(get_panda).patch(update_panda),
         )
         // 菜园 API
         .route("/garden/plots", axum::routing::get(list_plots))

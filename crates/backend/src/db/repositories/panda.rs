@@ -1,29 +1,29 @@
-//! 盼盼状态仓储
+//! Panda 状态仓储
 
 use chrono::{DateTime, Utc};
 use sqlx::SqlitePool;
 
-use crate::db::models::panpan::{ModuleRecord, PanpanState};
+use crate::db::models::panda::{ModuleRecord, PandaState};
 use crate::error::{DatabaseError, GameError, GameResult};
-use crate::game::panpan::{Emotion, Personality};
+use crate::game::panda::{Emotion, Personality};
 
-/// 盼盼状态仓储
-pub struct PanpanRepository {
+/// Panda 状态仓储
+pub struct PandaRepository {
     pool: SqlitePool,
 }
 
-impl PanpanRepository {
-    /// 创建新的盼盼仓储
+impl PandaRepository {
+    /// 创建新的 Panda 仓储
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
-    /// 获取盼盼状态（单例）
-    pub async fn get(&self) -> GameResult<Option<PanpanState>> {
-        let row = sqlx::query_as::<_, PanpanStateRow>(
+    /// 获取 Panda 状态（单例）
+    pub async fn get(&self) -> GameResult<Option<PandaState>> {
+        let row = sqlx::query_as::<_, PandaStateRow>(
             r#"SELECT name, model, manufacture_date, personality, trust_level,
                emotion, energy_current, energy_max, location, current_state, current_task
-               FROM panpan_states WHERE id = 1"#,
+               FROM panda_states WHERE id = 1"#,
         )
         .fetch_optional(&self.pool)
         .await
@@ -35,15 +35,15 @@ impl PanpanRepository {
         }
     }
 
-    /// 创建盼盼状态
-    pub async fn create(&self, state: &PanpanState) -> GameResult<()> {
+    /// 创建 Panda 状态
+    pub async fn create(&self, state: &PandaState) -> GameResult<()> {
         let personality_json =
             serde_json::to_string(&state.personality).map_err(|e| GameError::Validation {
                 details: format!("Failed to serialize personality: {}", e),
             })?;
 
         sqlx::query(
-            r#"INSERT INTO panpan_states (id, name, model, manufacture_date, personality,
+            r#"INSERT INTO panda_states (id, name, model, manufacture_date, personality,
                trust_level, emotion, energy_current, energy_max, location, current_state, current_task)
                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#
         )
@@ -65,15 +65,15 @@ impl PanpanRepository {
         Ok(())
     }
 
-    /// 更新盼盼状态
-    pub async fn update(&self, state: &PanpanState) -> GameResult<()> {
+    /// 更新 Panda 状态
+    pub async fn update(&self, state: &PandaState) -> GameResult<()> {
         let personality_json =
             serde_json::to_string(&state.personality).map_err(|e| GameError::Validation {
                 details: format!("Failed to serialize personality: {}", e),
             })?;
 
         sqlx::query(
-            r#"UPDATE panpan_states SET name = ?, model = ?, manufacture_date = ?,
+            r#"UPDATE panda_states SET name = ?, model = ?, manufacture_date = ?,
                personality = ?, trust_level = ?, emotion = ?, energy_current = ?,
                energy_max = ?, location = ?, current_state = ?, current_task = ?
                WHERE id = 1"#,
@@ -96,8 +96,8 @@ impl PanpanRepository {
         Ok(())
     }
 
-    /// 创建或更新盼盼状态
-    pub async fn upsert(&self, state: &PanpanState) -> GameResult<()> {
+    /// 创建或更新 Panda 状态
+    pub async fn upsert(&self, state: &PandaState) -> GameResult<()> {
         let existing = self.get().await?;
         if existing.is_some() {
             self.update(state).await
@@ -192,9 +192,9 @@ fn string_to_emotion(s: &str) -> GameResult<Emotion> {
     }
 }
 
-/// 盼盼状态数据库行
+/// Panda 状态数据库行
 #[derive(sqlx::FromRow)]
-struct PanpanStateRow {
+struct PandaStateRow {
     name: String,
     model: String,
     manufacture_date: String,
@@ -208,8 +208,8 @@ struct PanpanStateRow {
     current_task: Option<String>,
 }
 
-impl PanpanStateRow {
-    fn into_state(self) -> GameResult<PanpanState> {
+impl PandaStateRow {
+    fn into_state(self) -> GameResult<PandaState> {
         let manufacture_date = DateTime::parse_from_rfc3339(&self.manufacture_date)
             .map_err(|e| GameError::Validation {
                 details: format!("Invalid manufacture_date: {}", e),
@@ -223,7 +223,7 @@ impl PanpanStateRow {
 
         let emotion = string_to_emotion(&self.emotion)?;
 
-        Ok(PanpanState {
+        Ok(PandaState {
             name: self.name,
             model: self.model,
             manufacture_date,

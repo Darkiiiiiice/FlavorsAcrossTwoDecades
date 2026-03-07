@@ -1,8 +1,8 @@
-//! 盼盼模块系统
+//! Panda 模块系统
 
 use serde::{Deserialize, Serialize};
 
-/// 盼盼模块类型
+/// Panda 模块类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ModuleType {
     /// 通信模块 - 影响通信延迟

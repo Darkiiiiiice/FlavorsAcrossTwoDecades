@@ -9,7 +9,7 @@ pub mod garden;
 pub mod llm;
 pub mod memory;
 pub mod neighbor;
-pub mod panpan;
+pub mod panda;
 pub mod recipe;
 pub mod shop;
 pub mod time;
@@ -47,7 +47,7 @@ pub use neighbor::{
     AffinityLevel, Interaction, InteractionManager, InteractionResult, InteractionType, Neighbor,
     NeighborAbility, NeighborManager, NeighborRelation,
 };
-pub use panpan::{Emotion, Module, ModuleType, Panpan, Personality};
+pub use panda::{Emotion, Module, ModuleType, Panda, Personality};
 pub use recipe::{
     Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
     IngredientQuality, Recipe, RecipeCategory, RecipeManager, RecipeSource, RecipeStatus,

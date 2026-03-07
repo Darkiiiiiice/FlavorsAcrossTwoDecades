@@ -1,6 +1,6 @@
 //! LLM 集成模块
 //!
-//! 提供盼盼 AI 决策系统的核心功能
+//! 提供 Panda AI 决策系统的核心功能
 
 mod context;
 mod decision;
@@ -9,7 +9,7 @@ mod ollama;
 mod prompt;
 mod provider;
 
-pub use context::{MemoryFragment, PanpanContext, PanpanState, ShopSnapshot};
+pub use context::{MemoryFragment, PandaContext, PandaState, ShopSnapshot};
 pub use decision::{Decision, DecisionType};
 pub use minimax::MinimaxProvider;
 pub use ollama::OllamaProvider;

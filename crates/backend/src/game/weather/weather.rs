@@ -254,7 +254,7 @@ impl Weather {
             weather_type,
             effect,
             temperature: temperature as f64,
-            duration_hours: 20,
+            duration_hours: 60,
             create_at: Utc::now(),
         }
     }

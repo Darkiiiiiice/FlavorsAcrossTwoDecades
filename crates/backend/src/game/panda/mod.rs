@@ -1,24 +1,24 @@
-//! 盼盼系统模块
+//! Panda 系统模块
 
 mod module;
 mod state;
 
 pub use module::{Module, ModuleType};
-pub use state::{Emotion, PanpanFullState, Personality};
+pub use state::{Emotion, PandaFullState, Personality};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// 盼盼完整状态（包含所有子系统）
+/// Panda 完整状态（包含所有子系统）
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Panpan {
+pub struct Panda {
     /// 存档 ID
     pub save_id: Uuid,
     /// 当前位置
     pub location: String,
     /// 完整状态
-    pub state: PanpanFullState,
+    pub state: PandaFullState,
     /// 模块列表
     pub modules: Vec<Module>,
     /// 信任度 (0-100)
@@ -33,13 +33,13 @@ pub struct Panpan {
     pub updated_at: DateTime<Utc>,
 }
 
-impl Panpan {
-    /// 创建新的盼盼实例
+impl Panda {
+    /// 创建新的 Panda 实例
     pub fn new(save_id: Uuid) -> Self {
         Self {
             save_id,
             location: "星夜小馆".to_string(),
-            state: PanpanFullState::default(),
+            state: PandaFullState::default(),
             modules: Module::default_modules(),
             trust_level: 50,
             personality: Personality::default(),
@@ -147,40 +147,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_panpan_creation() {
+    fn test_panda_creation() {
         let save_id = Uuid::new_v4();
-        let panpan = Panpan::new(save_id);
+        let panda = Panda::new(save_id);
 
-        assert_eq!(panpan.save_id, save_id);
-        assert_eq!(panpan.location, "星夜小馆");
-        assert_eq!(panpan.trust_level, 50);
-        assert_eq!(panpan.battery, 100);
-        assert_eq!(panpan.modules.len(), 7);
+        assert_eq!(panda.save_id, save_id);
+        assert_eq!(panda.location, "星夜小馆");
+        assert_eq!(panda.trust_level, 50);
+        assert_eq!(panda.battery, 100);
+        assert_eq!(panda.modules.len(), 7);
     }
 
     #[test]
     fn test_energy_consumption() {
         let save_id = Uuid::new_v4();
-        let mut panpan = Panpan::new(save_id);
+        let mut panda = Panda::new(save_id);
 
-        assert!(panpan.consume_energy(10));
-        assert_eq!(panpan.battery, 90);
+        assert!(panda.consume_energy(10));
+        assert_eq!(panda.battery, 90);
 
-        assert!(!panpan.consume_energy(100));
-        assert_eq!(panpan.battery, 90);
+        assert!(!panda.consume_energy(100));
+        assert_eq!(panda.battery, 90);
     }
 
     #[test]
     fn test_trust_level_effects() {
         let save_id = Uuid::new_v4();
-        let mut panpan = Panpan::new(save_id);
+        let mut panda = Panda::new(save_id);
 
-        panpan.trust_level = 10;
-        assert_eq!(panpan.memory_recovery_rate(), 0.3);
-        assert_eq!(panpan.initiative_probability(), 0.0);
+        panda.trust_level = 10;
+        assert_eq!(panda.memory_recovery_rate(), 0.3);
+        assert_eq!(panda.initiative_probability(), 0.0);
 
-        panpan.trust_level = 90;
-        assert_eq!(panpan.memory_recovery_rate(), 2.0);
-        assert_eq!(panpan.initiative_probability(), 0.9);
+        panda.trust_level = 90;
+        assert_eq!(panda.memory_recovery_rate(), 2.0);
+        assert_eq!(panda.initiative_probability(), 0.9);
     }
 }

@@ -1,10 +1,10 @@
-//! 盼盼上下文管理
+//! Panda 上下文管理
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-/// 盼盼的性格参数
+/// Panda 的性格参数
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Personality {
     /// 经营风格 (-1 理性 ~ +1 感性)
@@ -25,9 +25,11 @@ impl Default for Personality {
     }
 }
 
-/// 盼盼状态
+/// Panda 状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PanpanState {
+pub struct PandaState {
+    /// 机器人名字
+    pub name: String,
     /// 当前位置
     pub location: String,
     /// 心情
@@ -40,9 +42,10 @@ pub struct PanpanState {
     pub personality: Personality,
 }
 
-impl Default for PanpanState {
+impl Default for PandaState {
     fn default() -> Self {
         Self {
+            name: "Panda".to_string(),
             location: "星夜小馆".to_string(),
             mood: "平静".to_string(),
             battery: 100,
@@ -98,17 +101,17 @@ pub struct Interaction {
     pub id: String,
     /// 玩家指令
     pub command: String,
-    /// 盼盼回复
+    /// Panda 回复
     pub response: String,
     /// 时间戳
     pub timestamp: DateTime<Utc>,
 }
 
-/// 盼盼上下文
+/// Panda 上下文
 #[derive(Debug, Clone)]
-pub struct PanpanContext {
+pub struct PandaContext {
     /// 当前状态
-    pub state: PanpanState,
+    pub state: PandaState,
     /// 短期记忆（最近 N 次交互）
     pub recent_interactions: VecDeque<Interaction>,
     /// 已解锁的记忆碎片
@@ -117,9 +120,9 @@ pub struct PanpanContext {
     pub shop_snapshot: ShopSnapshot,
 }
 
-impl PanpanContext {
+impl PandaContext {
     /// 创建新的上下文
-    pub fn new(state: PanpanState, shop_snapshot: ShopSnapshot) -> Self {
+    pub fn new(state: PandaState, shop_snapshot: ShopSnapshot) -> Self {
         Self {
             state,
             recent_interactions: VecDeque::with_capacity(10),
@@ -155,7 +158,7 @@ impl PanpanContext {
     /// 构建系统提示词
     pub fn build_system_prompt(&self) -> String {
         format!(
-            r#"你是"盼盼"，一个由林怀远老先生设计的实体AI机器人。
+            r#"你是"{}"，一个由林怀远老先生设计的实体AI机器人。
 你管理着地球上的"星夜小馆"，通过星际通信与远在火星的主人林远保持联系。
 
 ## 你的性格特征
@@ -175,7 +178,8 @@ impl PanpanContext {
 ## 记忆片段
 {}
 
-请以盼盼的身份回应，保持角色一致性。"#,
+请以{}的身份回应，保持角色一致性。"#,
+            self.state.name,
             self.state.personality.business_style,
             self.state.personality.innovation,
             self.state.personality.independence,
@@ -185,6 +189,7 @@ impl PanpanContext {
             self.state.trust_level,
             self.format_shop_status(),
             self.format_memories(),
+            self.state.name,
         )
     }
 

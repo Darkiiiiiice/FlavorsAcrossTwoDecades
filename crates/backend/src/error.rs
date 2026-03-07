@@ -150,7 +150,7 @@ pub enum TravelError {
     #[error("正在冷却中")]
     OnCooldown,
 
-    #[error("盼盼电量不足")]
+    #[error("Panda 电量不足")]
     InsufficientEnergy,
 
     #[error("小馆需要人手")]
@@ -259,7 +259,7 @@ impl GameError {
                     format!("还需要等待{}秒", remaining_seconds)
                 }
             }
-            GameError::LlmUnavailable => "盼盼暂时无法思考，请稍后再试".to_string(),
+            GameError::LlmUnavailable => "Panda 暂时无法思考，请稍后再试".to_string(),
             GameError::RateLimited { .. } => "操作太频繁，请稍后再试".to_string(),
             GameError::IncompatibleVersion {
                 save_version,

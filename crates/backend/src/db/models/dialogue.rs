@@ -47,11 +47,11 @@ impl DialogueMessage {
         )
     }
 
-    /// 创建盼盼消息
-    pub fn panpan_message(save_id: Uuid, content: String) -> Self {
+    /// 创建 Panda 消息
+    pub fn panda_message(save_id: Uuid, content: String) -> Self {
         Self::new(
             save_id,
-            "panpan".to_string(),
+            "panda".to_string(),
             content,
             "response".to_string(),
         )

@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS game_metadata (
 );
 
 
--- ========== 盼盼状态表 ==========
-CREATE TABLE IF NOT EXISTS panpan_states (
+-- ========== Panda 状态表 ==========
+CREATE TABLE IF NOT EXISTS panda_states (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     name TEXT NOT NULL,
     model TEXT NOT NULL,

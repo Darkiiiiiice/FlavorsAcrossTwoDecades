@@ -1,18 +1,20 @@
-//! 盼盼机器人 API 模块
+//! Panda 机器人 API 模块
 
 use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
-use crate::db::models::panpan::PanpanState;
-use crate::db::repositories::panpan::PanpanRepository;
+use crate::db::models::panda::PandaState;
+use crate::db::repositories::panda::PandaRepository;
 use crate::error::{GameError, GameResult};
 use crate::game::AppState;
 
-/// 更新盼盼状态请求
+/// 更新 Panda 状态请求
 #[derive(Debug, Deserialize, ToSchema)]
-pub struct UpdatePanpanRequest {
+pub struct UpdatePandaRequest {
+    /// 机器人名字
+    pub name: Option<String>,
     /// 信任等级
     pub trust_level: Option<u32>,
     /// 当前状态
@@ -23,9 +25,9 @@ pub struct UpdatePanpanRequest {
     pub location: Option<String>,
 }
 
-/// 盼盼状态响应
+/// Panda 状态响应
 #[derive(Debug, Serialize, ToSchema)]
-pub struct PanpanResponse {
+pub struct PandaResponse {
     /// 名称
     pub name: String,
     /// 型号
@@ -50,8 +52,8 @@ pub struct PanpanResponse {
     pub current_task: Option<String>,
 }
 
-impl PanpanResponse {
-    fn from_state(state: PanpanState) -> Self {
+impl PandaResponse {
+    fn from_state(state: PandaState) -> Self {
         let personality_json =
             serde_json::to_string(&state.personality).unwrap_or_else(|_| "{}".to_string());
         Self {
@@ -70,67 +72,72 @@ impl PanpanResponse {
     }
 }
 
-/// 获取盼盼状态
+/// 获取 Panda 状态
 #[utoipa::path(
     get,
-    path = "/api/v1/panpan",
-    tag = "panpan",
+    path = "/api/v1/panda",
+    tag = "panda",
     responses(
-        (status = 200, description = "获取盼盼状态成功", body = PanpanResponse),
-        (status = 404, description = "盼盼状态不存在")
+        (status = 200, description = "获取 Panda 状态成功", body = PandaResponse),
+        (status = 404, description = "Panda 状态不存在")
     )
 )]
-pub async fn get_panpan(State(state): State<Arc<AppState>>) -> GameResult<Json<PanpanResponse>> {
-    let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let panpan = repo.get().await?.ok_or_else(|| GameError::NotFound {
-        entity_type: "PanpanState".to_string(),
+pub async fn get_panda(State(state): State<Arc<AppState>>) -> GameResult<Json<PandaResponse>> {
+    let repo = PandaRepository::new(state.db_pool.pool().clone());
+    let panda = repo.get().await?.ok_or_else(|| GameError::NotFound {
+        entity_type: "PandaState".to_string(),
         entity_id: "current".to_string(),
     })?;
 
-    Ok(Json(PanpanResponse::from_state(panpan)))
+    Ok(Json(PandaResponse::from_state(panda)))
 }
 
-/// 更新盼盼状态
+/// 更新 Panda 状态
 #[utoipa::path(
     patch,
-    path = "/api/v1/panpan",
-    tag = "panpan",
-    request_body = UpdatePanpanRequest,
+    path = "/api/v1/panda",
+    tag = "panda",
+    request_body = UpdatePandaRequest,
     responses(
-        (status = 200, description = "更新成功", body = PanpanResponse),
-        (status = 404, description = "盼盼状态不存在")
+        (status = 200, description = "更新成功", body = PandaResponse),
+        (status = 404, description = "Panda 状态不存在")
     )
 )]
-pub async fn update_panpan(
+pub async fn update_panda(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<UpdatePanpanRequest>,
-) -> GameResult<Json<PanpanResponse>> {
-    let repo = PanpanRepository::new(state.db_pool.pool().clone());
-    let mut panpan = repo.get().await?.ok_or_else(|| GameError::NotFound {
-        entity_type: "PanpanState".to_string(),
+    Json(payload): Json<UpdatePandaRequest>,
+) -> GameResult<Json<PandaResponse>> {
+    let repo = PandaRepository::new(state.db_pool.pool().clone());
+    let mut panda = repo.get().await?.ok_or_else(|| GameError::NotFound {
+        entity_type: "PandaState".to_string(),
         entity_id: "current".to_string(),
     })?;
 
     if let Some(trust_level) = payload.trust_level {
-        panpan.trust_level = trust_level;
+        panda.trust_level = trust_level;
     }
     if let Some(current_state) = payload.current_state {
-        panpan.current_state = current_state;
+        panda.current_state = current_state;
     }
     if let Some(current_task) = payload.current_task {
-        panpan.current_task = Some(current_task);
+        panda.current_task = Some(current_task);
     }
     if let Some(location) = payload.location {
-        panpan.location = location;
+        panda.location = location;
+    }
+    if let Some(name) = payload.name {
+        if !name.trim().is_empty() {
+            panda.name = name.trim().to_string();
+        }
     }
 
-    repo.update(&panpan).await?;
+    repo.update(&panda).await?;
 
-    Ok(Json(PanpanResponse::from_state(panpan)))
+    Ok(Json(PandaResponse::from_state(panda)))
 }
 
-fn emotion_to_string(emotion: &crate::game::panpan::Emotion) -> String {
-    use crate::game::panpan::Emotion;
+fn emotion_to_string(emotion: &crate::game::panda::Emotion) -> String {
+    use crate::game::panda::Emotion;
     match emotion {
         Emotion::Happy => "happy".to_string(),
         Emotion::Calm => "calm".to_string(),

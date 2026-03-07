@@ -116,7 +116,7 @@ impl MemoryManager {
             MemoryFragmentType::Story,
             MemoryRarity::Rare,
         );
-        fragment.description = "小馆重新开业后的第一位顾客，给了盼盼莫大的鼓励。".to_string();
+        fragment.description = "小馆重新开业后的第一位顾客，给了 Panda 莫大的鼓励。".to_string();
         fragment.content = Some(MemoryContent::new(
             "那是小馆重新开业的第一天。一位老街坊推门而入，点了一碗最简单的番茄炒蛋。吃完后，他笑着说：'味道还是那么好，就像二十年前一样。'".to_string(),
             "这一句话，让我觉得一切努力都是值得的。".to_string(),
@@ -253,7 +253,7 @@ impl MemoryManager {
         );
         fragment.description = "在整理祖父遗物时，发现的一本尘封的笔记本。".to_string();
         fragment.content = Some(MemoryContent::new(
-            "在祖父的旧书箱里，我发现了一本泛黄的笔记本。翻开一看，里面记录着一些从未见过的菜谱——那是祖父年轻时在各地学到的独门秘方。最后一页写着：'等我离开后，盼盼会找到这个。这是我的私藏，现在交给你了。'".to_string(),
+            "在祖父的旧书箱里，我发现了一本泛黄的笔记本。翻开一看，里面记录着一些从未见过的菜谱——那是祖父年轻时在各地学到的独门秘方。最后一页写着：'等我离开后，Panda 会找到这个。这是我的私藏，现在交给你了。'".to_string(),
             "祖父……原来他早就准备好了。".to_string(),
         )
         .with_scene("手颤抖着翻开那本旧笔记本，泛黄的纸页散发着岁月的气息。".to_string())

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::config::LlmConfig;
 use crate::error::Result;
 
-use super::context::PanpanContext;
+use super::context::PandaContext;
 use super::decision::DecisionType;
 
 /// LLM 请求
@@ -87,7 +87,7 @@ impl LlmManager {
     /// 生成盼盼的决策
     pub async fn generate_decision(
         &self,
-        context: &PanpanContext,
+        context: &PandaContext,
         decision_type: &DecisionType,
     ) -> Result<super::decision::Decision> {
         // 构建请求

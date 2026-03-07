@@ -1,13 +1,13 @@
-//! 盼盼状态数据模型
+//! Panda 机器人状态数据模型
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::game::panpan::{Emotion, Module, Personality};
+use crate::game::panda::{Emotion, Module, Personality};
 
-/// 盼盼状态
+/// Panda 状态
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PanpanState {
+pub struct PandaState {
     /// 名称
     pub name: String,
     /// 型号
@@ -32,11 +32,11 @@ pub struct PanpanState {
     pub current_task: Option<String>,
 }
 
-impl PanpanState {
-    /// 创建新的盼盼状态
+impl PandaState {
+    /// 创建新的 Panda 状态
     pub fn new() -> Self {
         Self {
-            name: "盼盼".to_string(),
+            name: "Panda".to_string(),
             model: "PP-X1".to_string(),
             manufacture_date: Utc::now(),
             personality: Personality::default(),
@@ -51,7 +51,7 @@ impl PanpanState {
     }
 }
 
-impl Default for PanpanState {
+impl Default for PandaState {
     fn default() -> Self {
         Self::new()
     }
@@ -77,7 +77,7 @@ pub struct ModuleRecord {
 impl ModuleRecord {
     /// 从 Module 创建记录
     pub fn from_module(module: &Module) -> Self {
-        use crate::game::panpan::ModuleType;
+        use crate::game::panda::ModuleType;
 
         let module_type = match module.module_type {
             ModuleType::Communication => "communication",

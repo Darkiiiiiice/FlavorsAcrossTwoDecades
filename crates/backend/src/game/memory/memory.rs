@@ -93,8 +93,8 @@ pub struct MemoryContent {
     pub grandfather_quote: Option<String>,
     /// 感官记忆
     pub sensory_memories: Vec<SensoryMemory>,
-    /// 盼盼的反应
-    pub panpan_reaction: String,
+    /// Panda 的反应
+    pub panda_reaction: String,
     /// 解锁的知识
     pub unlocked_knowledge: Option<String>,
     /// 情感标签
@@ -107,13 +107,13 @@ pub struct MemoryContent {
 
 impl MemoryContent {
     /// 创建新的记忆内容
-    pub fn new(narrative: String, panpan_reaction: String) -> Self {
+    pub fn new(narrative: String, panda_reaction: String) -> Self {
         Self {
             narrative,
             scene_description: None,
             grandfather_quote: None,
             sensory_memories: Vec::new(),
-            panpan_reaction,
+            panda_reaction,
             unlocked_knowledge: None,
             emotion_tags: Vec::new(),
             time_hint: None,
@@ -211,9 +211,9 @@ impl MemoryContent {
             result.push_str("\"\n\n");
         }
 
-        // 添加盼盼反应
-        result.push_str("【盼盼的感想】\n");
-        result.push_str(&self.panpan_reaction);
+        // 添加 Panda 反应
+        result.push_str("【Panda 的感想】\n");
+        result.push_str(&self.panda_reaction);
 
         result
     }
@@ -275,6 +275,6 @@ mod tests {
         let full = content.full_description();
         assert!(full.contains("【场景】"));
         assert!(full.contains("【祖父说】"));
-        assert!(full.contains("【盼盼的感想】"));
+        assert!(full.contains("【Panda 的感想】"));
     }
 }
