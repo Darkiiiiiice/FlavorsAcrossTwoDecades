@@ -90,21 +90,21 @@ impl GameEngine {
                     enviroment_system.update(time_system.current_timestamp()).await;
                     // 3. 处理 Panda
                     panda_system.update().await;
-                    // 2. 处理到达的指令
-                    let arrived_commands = self.command_queue.process_arrived();
-                    for cmd in arrived_commands {
-                        if let Err(e) = self.process_command(cmd).await {
-                            tracing::error!("Failed to process command: {}", e);
-                        }
-                    }
+                    // // 2. 处理到达的指令
+                    // let arrived_commands = self.command_queue.process_arrived();
+                    // for cmd in arrived_commands {
+                    //     if let Err(e) = self.process_command(cmd).await {
+                    //         tracing::error!("Failed to process command: {}", e);
+                    //     }
+                    // }
 
-                    // 3. 处理到期事件
-                    let due_events = self.event_dispatcher.process_due_events();
-                    for event in due_events {
-                        if let Err(e) = self.process_event(event).await {
-                            tracing::error!("Failed to process event: {}", e);
-                        }
-                    }
+                    // // 3. 处理到期事件
+                    // let due_events = self.event_dispatcher.process_due_events();
+                    // for event in due_events {
+                    //     if let Err(e) = self.process_event(event).await {
+                    //         tracing::error!("Failed to process event: {}", e);
+                    //     }
+                    // }
                 }
             }
         }

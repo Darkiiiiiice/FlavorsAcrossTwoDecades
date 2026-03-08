@@ -4,18 +4,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PandaLocation {
-    Restaurant(RestaurantState),    // 餐厅
-    Kitchen(KitchenState),          // 厨房
-    Backyard(BackyardState),        // 后院
-    Workshop(WorkshopState),        // 工作室
-    ChargingStation(ChargingState), // 充电站
+    Restaurant(RestaurantState), // 餐厅
+    Kitchen(KitchenState),       // 厨房
+    Backyard(BackyardState),     // 后院
+    Workshop(WorkshopState),     // 工作室
+    ChargingStation,             // 充电站
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChargingState {
-    Charging,
-    NotCharging,
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorkshopState {

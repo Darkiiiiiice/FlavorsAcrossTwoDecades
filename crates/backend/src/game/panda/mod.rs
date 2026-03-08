@@ -10,7 +10,7 @@ pub use state::{Emotion, PandaFullState, Personality};
 
 use chrono::{DateTime, Utc};
 
-use crate::game::panda::state::{ChargingState, PandaLocation};
+use crate::game::panda::{module::BatteryModule, state::PandaLocation};
 
 /// Panda 完整状态（包含所有子系统）
 #[derive(Debug, Clone)]
@@ -19,12 +19,14 @@ pub struct Panda {
     pub id: i64,
     /// 是否正在思考
     pub thinking: bool,
-    /// Panda 当前状态
-    pub state: String,
     /// 当前位置
     pub location: PandaLocation,
+    /// 当前状态
+    pub status: PandaStatus,
+    /// 电池组件
+    pub battery_module: BatteryModule,
     /// 完整状态
-    pub state1: PandaFullState,
+    pub state: PandaFullState,
     /// 模块列表
     pub modules: Vec<Module>,
     /// 信任度 (0-100)
@@ -33,8 +35,6 @@ pub struct Panda {
     pub personality: Personality,
     /// 当前情绪
     pub emotion: Emotion,
-    /// 电池电量 (0-100000000)
-    pub battery: u64,
     /// 最后更新时间
     pub updated_at: DateTime<Utc>,
 }
@@ -42,18 +42,18 @@ pub struct Panda {
 impl Panda {
     /// 创建新的 Panda 实例
     pub fn new() -> Self {
-        let location = PandaLocation::ChargingStation(ChargingState::Charging);
+        let location = PandaLocation::ChargingStation;
         Self {
             id: 0,
             location: location,
             thinking: false,
-            state: "".to_string(),
-            state1: PandaFullState::default(),
+            status: PandaStatus::Charging,
+            state: PandaFullState::default(),
+            battery_module: BatteryModule::new(),
             modules: Module::default_modules(),
             trust_level: 50,
             personality: Personality::default(),
             emotion: Emotion::Calm,
-            battery: 100,
             updated_at: Utc::now(),
         }
     }
@@ -68,23 +68,6 @@ impl Panda {
         self.modules
             .iter_mut()
             .find(|m| m.module_type == module_type)
-    }
-
-    /// 消耗能量
-    pub fn consume_energy(&mut self, amount: u64) -> bool {
-        if self.battery >= amount {
-            self.battery -= amount;
-            self.updated_at = Utc::now();
-            true
-        } else {
-            false
-        }
-    }
-
-    /// 充电
-    pub fn charge(&mut self, amount: u64) {
-        self.battery = (self.battery + amount).min(100);
-        self.updated_at = Utc::now();
     }
 
     /// 更新信任度
@@ -151,7 +134,27 @@ impl Panda {
     }
 
     pub async fn tick(&mut self) {
-        tracing::info!("Panda tick!, battery = {}", self.battery);
-        self.battery -= 1;
+        tracing::info!("Panda tick!, status = {:?}", self.status,);
+
+        match self.status {
+            PandaStatus::Resting => {}
+            PandaStatus::Charging => {
+                self.battery_module.set_charging(true);
+            }
+            _ => {}
+        }
+
+        self.battery_module.tick();
+        if !self.battery_module.is_charging() {
+            self.location = PandaLocation::ChargingStation;
+            self.status = PandaStatus::Nothing;
+        }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum PandaStatus {
+    Nothing,  // 无状态
+    Resting,  // 休息中
+    Charging, // 充电中
 }

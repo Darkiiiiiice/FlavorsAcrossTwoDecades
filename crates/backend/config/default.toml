@@ -8,11 +8,26 @@ port = 3000
 url = "sqlite:target/debug/flavors_game.db"
 
 [llm]
-provider = "ollama"
-model = "qwen3:4b"
-base_url = "http://localhost:11434"
+provider = "minimax"
+model = "MiniMax-M2.5"
+base_url = "https://api.minimaxi.com"
+# API Key 可以通过环境变量 FLAVORS__LLM__API_KEY 设置
+api_key = ""
 timeout_seconds = 60
 max_retries = 3
+temperature = 0.8
+max_tokens = 2048
+
+# Ollama 配置示例
+# [llm]
+# provider = "ollama"
+# model = "qwen3:4b"
+# base_url = "http://localhost"
+# port = 11434
+# timeout_seconds = 60
+# max_retries = 3
+# temperature = 0.8
+# max_tokens = 2048
 
 [game]
 # 初始通信延迟范围（秒）

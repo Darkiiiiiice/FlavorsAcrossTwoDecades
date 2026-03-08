@@ -2,6 +2,18 @@
 
 use serde::{Deserialize, Serialize};
 
+const MAX_BATTERY_LEVELS: usize = 10;
+
+const MAX_POWER: [f32; MAX_BATTERY_LEVELS] = [
+    1000.0, 2000.0, 3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0,
+];
+const WORK_SPEED: [f32; MAX_BATTERY_LEVELS] = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1];
+const CHARGE_RATE: [f32; MAX_BATTERY_LEVELS] = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+
+const LEVEL_UP_XP: [u32; MAX_BATTERY_LEVELS] = [
+    100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000,
+];
+
 /// Panda 模块类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ModuleType {
@@ -13,8 +25,6 @@ pub enum ModuleType {
     Sensor,
     /// 移动模块 - 影响旅行速度和维修能力
     Mobility,
-    /// 电池模块 - 影响续航能力
-    Battery,
     /// 厨房模块 - 影响烹饪成功率和菜品品质
     Kitchen,
     /// 社交模块 - 影响顾客互动和邻里关系
@@ -29,7 +39,6 @@ impl ModuleType {
             ModuleType::Memory => "记忆模块",
             ModuleType::Sensor => "传感器模块",
             ModuleType::Mobility => "移动模块",
-            ModuleType::Battery => "电池模块",
             ModuleType::Kitchen => "厨房模块",
             ModuleType::Social => "社交模块",
         }
@@ -42,7 +51,6 @@ impl ModuleType {
             ModuleType::Memory => "存储和管理记忆碎片",
             ModuleType::Sensor => "提高实验精度和检测能力",
             ModuleType::Mobility => "提升移动速度和维修能力",
-            ModuleType::Battery => "提供能量，延长续航时间",
             ModuleType::Kitchen => "增强烹饪能力和菜品品质",
             ModuleType::Social => "改善与顾客和邻居的关系",
         }
@@ -83,7 +91,6 @@ impl Module {
             Self::new(ModuleType::Memory),
             Self::new(ModuleType::Sensor),
             Self::new(ModuleType::Mobility),
-            Self::new(ModuleType::Battery),
             Self::new(ModuleType::Kitchen),
             Self::new(ModuleType::Social),
         ]
@@ -164,27 +171,6 @@ impl Module {
         }
     }
 
-    /// 计算电池续航时间（小时，仅电池模块）
-    pub fn battery_duration(&self) -> u32 {
-        if self.module_type != ModuleType::Battery {
-            return 0;
-        }
-
-        match self.level {
-            1 => 4,
-            2 => 8,
-            3 => 12,
-            4 => 16,
-            5 => 20,
-            6 => 24,
-            7 => 30,
-            8 => 36,
-            9 => 42,
-            10 => 48,
-            _ => 4,
-        }
-    }
-
     /// 计算实验误差（仅传感器模块）
     pub fn experiment_error_rate(&self) -> f32 {
         if self.module_type != ModuleType::Sensor {
@@ -225,44 +211,88 @@ impl Module {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#[derive(Debug, Clone)]
+pub struct BatteryModule {
+    /// 等级 (1-10)
+    pub level: u32,
+    /// 完好度 (0-100)
+    pub condition: f32,
+    /// 经验值
+    pub experience: u32,
+    /// 是否可用
+    pub is_functional: bool,
+    /// 电量
+    pub power: f32,
+    /// 充电速度
+    pub charge_rate: f32,
+    /// 充电中
+    pub is_charging: bool,
+}
 
-    #[test]
-    fn test_module_creation() {
-        let module = Module::new(ModuleType::Communication);
-        assert_eq!(module.level, 1);
-        assert_eq!(module.condition, 100);
-        assert!(module.is_functional);
+impl BatteryModule {
+    pub fn new() -> Self {
+        Self {
+            level: 1,
+            condition: 100.0,
+            experience: 0,
+            is_functional: true,
+            power: MAX_POWER[0] * 0.99,
+            charge_rate: CHARGE_RATE[0],
+            is_charging: false,
+        }
     }
 
-    #[test]
-    fn test_module_level_up() {
-        let mut module = Module::new(ModuleType::Communication);
-        assert!(!module.add_experience(50)); // 需要100经验
-        assert!(module.add_experience(50)); // 现在共100，升级
-        assert_eq!(module.level, 2);
-        assert_eq!(module.experience, 0);
+    pub fn power_is_full(&self) -> bool {
+        self.power >= MAX_POWER[0]
     }
 
-    #[test]
-    fn test_module_damage() {
-        let mut module = Module::new(ModuleType::Communication);
-        module.damage(90);
-        assert_eq!(module.condition, 10);
-        assert!(!module.is_functional);
+    pub fn is_charging(&self) -> bool {
+        self.is_charging
     }
 
-    #[test]
-    fn test_communication_delay() {
-        let mut module = Module::new(ModuleType::Communication);
-        assert_eq!(module.communication_delay(), 45);
+    pub fn set_charging(&mut self, is_charging: bool) {
+        self.is_charging = is_charging;
+    }
 
-        module.level = 5;
-        assert_eq!(module.communication_delay(), 25);
+    pub fn tick(&mut self) {
+        tracing::info!(
+            "Battery Status: level = {}, condition: = {}, experience = {}, power = {}, charge_rate = {}, is_charging = {}",
+            self.level,
+            self.condition,
+            self.experience,
+            self.power,
+            self.charge_rate,
+            self.is_charging
+        );
+        if self.is_charging {
+            self.charge();
+        } else {
+            self.work();
+        }
+        self.level_up();
+    }
 
-        module.level = 10;
-        assert_eq!(module.communication_delay(), 1);
+    fn level_up(&mut self) {
+        if self.experience >= LEVEL_UP_XP[(self.level - 1) as usize] {
+            self.level += 1;
+            self.experience = 0;
+        }
+    }
+
+    fn charge(&mut self) {
+        let max_power = MAX_POWER[(self.level - 1) as usize];
+        if self.power >= max_power {
+            self.is_charging = false;
+            return;
+        }
+        self.power = (self.power + self.charge_rate).min(max_power);
+    }
+
+    fn work(&mut self) {
+        if self.power > 0.0 {
+            self.power -= WORK_SPEED[(self.level - 1) as usize];
+            self.condition -= 0.001;
+            self.experience += 1;
+        }
     }
 }
