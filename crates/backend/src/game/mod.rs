@@ -47,7 +47,7 @@ pub use neighbor::{
     AffinityLevel, Interaction, InteractionManager, InteractionResult, InteractionType, Neighbor,
     NeighborAbility, NeighborManager, NeighborRelation,
 };
-pub use panda::{Emotion, Module, ModuleType, Panda, Personality};
+pub use panda::{Emotion, Module, ModuleType, Panda, PandaManager, Personality};
 pub use recipe::{
     Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
     IngredientQuality, Recipe, RecipeCategory, RecipeManager, RecipeSource, RecipeStatus,

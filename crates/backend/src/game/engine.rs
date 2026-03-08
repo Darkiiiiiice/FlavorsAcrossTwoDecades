@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::db::DbPool;
 use crate::game::EnvironmentManager;
+use crate::game::panda::PandaManager;
 
 use super::command::CommandQueue;
 use super::event::EventDispatcher;
@@ -19,6 +20,8 @@ pub struct GameEngine {
     time_system: TimeSystem,
     /// 环境系统
     environment_system: EnvironmentManager,
+    /// Panda 系统
+    panda_system: PandaManager,
     /// 指令队列
     command_queue: CommandQueue,
     /// 事件分发器
@@ -40,6 +43,7 @@ impl GameEngine {
         Self {
             time_system: TimeSystem::new(),
             environment_system: EnvironmentManager::new(db_pool.clone(), llm_manager.clone()),
+            panda_system: PandaManager::new(db_pool.clone()),
             command_queue: CommandQueue::new(delay),
             event_dispatcher: EventDispatcher::new(),
             llm_manager,
@@ -77,16 +81,15 @@ impl GameEngine {
                 _ = tick_interval.tick() => {
                     let time_system = &mut self.time_system;
                     let enviroment_system = &mut self.environment_system;
+                    let panda_system = &mut self.panda_system;
 
                     tracing::info!("Tick: start_time={} timestamp={}", time_system.start_time(), time_system.current_timestamp());
                     // 1. 处理时间更新
                     time_system.tick();
                     // 2. 处理环境
                     enviroment_system.update(time_system.current_timestamp()).await;
-
-
-
-
+                    // 3. 处理 Panda
+                    panda_system.update().await;
                     // 2. 处理到达的指令
                     let arrived_commands = self.command_queue.process_arrived();
                     for cmd in arrived_commands {

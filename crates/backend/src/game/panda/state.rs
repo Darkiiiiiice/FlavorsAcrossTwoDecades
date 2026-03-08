@@ -2,6 +2,65 @@
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PandaLocation {
+    Restaurant(RestaurantState),    // 餐厅
+    Kitchen(KitchenState),          // 厨房
+    Backyard(BackyardState),        // 后院
+    Workshop(WorkshopState),        // 工作室
+    ChargingStation(ChargingState), // 充电站
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChargingState {
+    Charging,
+    NotCharging,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum WorkshopState {
+    // 工作
+    Working,
+    // 实验
+    Experimenting,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RestaurantState {
+    Chatting, // 聊天
+    Serving,  // 服务
+    Cleaning, // 清洁
+    Cooking,  // 烹饪
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum KitchenState {
+    // 洗菜
+    WashingVegetables,
+    // 切菜
+    Cutting,
+    // 炒菜
+    Cooking,
+    // 蒸煮
+    Steaming,
+    // 洗碗
+    WashingDishes,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum BackyardState {
+    // 耕地
+    Plowing,
+    // 种地
+    Planting,
+    // 浇水
+    Irrigating,
+    // 除草
+    Weeding,
+    // 收获
+    Harvesting,
+}
+
 /// 性格参数（0-100）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Personality {

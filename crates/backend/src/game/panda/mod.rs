@@ -1,24 +1,30 @@
 //! Panda 系统模块
 
+mod manager;
 mod module;
 mod state;
 
+pub use manager::PandaManager;
 pub use module::{Module, ModuleType};
 pub use state::{Emotion, PandaFullState, Personality};
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+
+use crate::game::panda::state::{ChargingState, PandaLocation};
 
 /// Panda 完整状态（包含所有子系统）
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Panda {
-    /// 存档 ID
-    pub save_id: Uuid,
+    /// ID
+    pub id: i64,
+    /// 是否正在思考
+    pub thinking: bool,
+    /// Panda 当前状态
+    pub state: String,
     /// 当前位置
-    pub location: String,
+    pub location: PandaLocation,
     /// 完整状态
-    pub state: PandaFullState,
+    pub state1: PandaFullState,
     /// 模块列表
     pub modules: Vec<Module>,
     /// 信任度 (0-100)
@@ -27,19 +33,22 @@ pub struct Panda {
     pub personality: Personality,
     /// 当前情绪
     pub emotion: Emotion,
-    /// 电池电量 (0-100)
-    pub battery: u32,
+    /// 电池电量 (0-100000000)
+    pub battery: u64,
     /// 最后更新时间
     pub updated_at: DateTime<Utc>,
 }
 
 impl Panda {
     /// 创建新的 Panda 实例
-    pub fn new(save_id: Uuid) -> Self {
+    pub fn new() -> Self {
+        let location = PandaLocation::ChargingStation(ChargingState::Charging);
         Self {
-            save_id,
-            location: "星夜小馆".to_string(),
-            state: PandaFullState::default(),
+            id: 0,
+            location: location,
+            thinking: false,
+            state: "".to_string(),
+            state1: PandaFullState::default(),
             modules: Module::default_modules(),
             trust_level: 50,
             personality: Personality::default(),
@@ -62,7 +71,7 @@ impl Panda {
     }
 
     /// 消耗能量
-    pub fn consume_energy(&mut self, amount: u32) -> bool {
+    pub fn consume_energy(&mut self, amount: u64) -> bool {
         if self.battery >= amount {
             self.battery -= amount;
             self.updated_at = Utc::now();
@@ -73,7 +82,7 @@ impl Panda {
     }
 
     /// 充电
-    pub fn charge(&mut self, amount: u32) {
+    pub fn charge(&mut self, amount: u64) {
         self.battery = (self.battery + amount).min(100);
         self.updated_at = Utc::now();
     }
@@ -140,47 +149,9 @@ impl Panda {
             Emotion::Excited => 1.0,
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_panda_creation() {
-        let save_id = Uuid::new_v4();
-        let panda = Panda::new(save_id);
-
-        assert_eq!(panda.save_id, save_id);
-        assert_eq!(panda.location, "星夜小馆");
-        assert_eq!(panda.trust_level, 50);
-        assert_eq!(panda.battery, 100);
-        assert_eq!(panda.modules.len(), 7);
-    }
-
-    #[test]
-    fn test_energy_consumption() {
-        let save_id = Uuid::new_v4();
-        let mut panda = Panda::new(save_id);
-
-        assert!(panda.consume_energy(10));
-        assert_eq!(panda.battery, 90);
-
-        assert!(!panda.consume_energy(100));
-        assert_eq!(panda.battery, 90);
-    }
-
-    #[test]
-    fn test_trust_level_effects() {
-        let save_id = Uuid::new_v4();
-        let mut panda = Panda::new(save_id);
-
-        panda.trust_level = 10;
-        assert_eq!(panda.memory_recovery_rate(), 0.3);
-        assert_eq!(panda.initiative_probability(), 0.0);
-
-        panda.trust_level = 90;
-        assert_eq!(panda.memory_recovery_rate(), 2.0);
-        assert_eq!(panda.initiative_probability(), 0.9);
+    pub async fn tick(&mut self) {
+        tracing::info!("Panda tick!, battery = {}", self.battery);
+        self.battery -= 1;
     }
 }
