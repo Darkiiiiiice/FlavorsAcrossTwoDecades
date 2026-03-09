@@ -241,6 +241,34 @@ impl CustomerRepository {
         Ok(customers)
     }
 
+    /// 随机获取一位顾客
+    pub async fn find_random(&self) -> GameResult<Option<CustomerRecord>> {
+        // 使用 RANDOM() 随机选择一位顾客
+        let row = sqlx::query_as::<_, CustomerRow>(
+            r#"SELECT id, name, age, occupation, customer_type, affinity, visit_count, story_background, created_at, updated_at
+               FROM customers ORDER BY RANDOM() LIMIT 1"#
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
+
+        match row {
+            Some(customer_row) => {
+                let pref_row = sqlx::query_as::<_, PreferenceRow>(
+                    r#"SELECT id, customer_id, flavor, dietary, price_sensitivity, patience, favorite_categories
+                       FROM preferences WHERE customer_id = ?"#
+                )
+                .bind(customer_row.id)
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|e| GameError::Database(DatabaseError::QueryFailed(e.to_string())))?;
+
+                Ok(Some(customer_row.into_record(pref_row)?))
+            }
+            None => Ok(None),
+        }
+    }
+
     /// 统计顾客总数
     pub async fn count(&self) -> GameResult<i64> {
         let row: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM customers"#)

@@ -104,7 +104,8 @@ impl GameEngine {
                     panda_system.tick().await;
                     // 5. 处理餐厅
                     let panda_status = panda_system.panda.status.clone();
-                    restaurant_system.tick(panda_status).await;
+                    let current_timestamp = time_system.current_timestamp();
+                    restaurant_system.tick(panda_status, current_timestamp).await;
                     // 6. 处理顾客
                     let is_restaurant_open = restaurant_system.restaurant.is_open();
                     let current_timestamp = time_system.current_timestamp();

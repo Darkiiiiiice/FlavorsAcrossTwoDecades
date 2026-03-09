@@ -6,8 +6,9 @@ mod manager;
 
 pub use manager::RestaurantManager;
 
-use crate::game::order::OrderManager;
-use chrono::{DateTime, Utc};
+use crate::game::Customer;
+
+const MAX_CAPACITY: i32 = 20;
 
 /// 餐厅状态
 #[derive(Debug, Clone, Default)]
@@ -18,6 +19,10 @@ pub struct Restaurant {
     pub name: String,
     /// 当前营业状态
     pub status: RestaurantStatus,
+    /// 最大顾客容量
+    pub max_capacity: i32,
+    /// 当前餐厅顾客
+    pub current_customers: Vec<Customer>,
 }
 
 impl Restaurant {
@@ -27,12 +32,22 @@ impl Restaurant {
             id: 0,
             name: "星夜小馆".to_string(),
             status: RestaurantStatus::Open,
+            max_capacity: MAX_CAPACITY,
+            current_customers: Vec::new(),
         }
     }
 
     /// 餐厅是否营业中
     pub fn is_open(&self) -> bool {
         matches!(self.status, RestaurantStatus::Open)
+    }
+
+    pub fn tick(&mut self) {
+        tracing::debug!(
+            "Restaurant tick: status={:?}, customers={:?}",
+            self.status,
+            self.current_customers
+        );
     }
 }
 
