@@ -7,56 +7,109 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
-use crate::db::models::customer::CustomerRecord;
+use crate::db::models::customer::{CustomerRecord, PreferenceRecord};
 use crate::db::repositories::customer::CustomerRepository;
 use crate::error::{GameError, GameResult};
 use crate::game::AppState;
+use crate::game::customer::{CustomerType, Customer};
+use crate::game::customer::preference::{Preference, FlavorPreference, DietaryRestriction};
+
+/// 偏好响应
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct PreferenceResponse {
+    /// 偏好ID
+    pub id: i64,
+    /// 口味偏好 (0=Light, 1=Medium, 2=Heavy, 3=Spicy, 4=SweetSour)
+    pub flavor: i32,
+    /// 饮食限制 (0=None, 1=Vegetarian, 2=Halal, 3=GlutenFree, 4=LowSugar)
+    pub dietary: i32,
+    /// 价格敏感度 (0-100)
+    pub price_sensitivity: u32,
+    /// 耐心值 (0-100)
+    pub patience: u32,
+    /// 喜欢的菜品类型
+    pub favorite_categories: Vec<String>,
+}
+
+impl From<PreferenceRecord> for PreferenceResponse {
+    fn from(pref: PreferenceRecord) -> Self {
+        let favorite_categories: Vec<String> = serde_json::from_str(&pref.favorite_categories)
+            .unwrap_or_default();
+        Self {
+            id: pref.id,
+            flavor: i32::from(pref.flavor),
+            dietary: i32::from(pref.dietary),
+            price_sensitivity: pref.price_sensitivity,
+            patience: pref.patience,
+            favorite_categories,
+        }
+    }
+}
 
 /// 更新顾客请求
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateCustomerRequest {
-    /// 好感度
-    pub favorability: Option<u32>,
+    /// 好感度 (0-1000)
+    pub affinity: Option<u32>,
     /// 访问次数
     pub visit_count: Option<u32>,
-    /// 偏好 (JSON)
-    pub preferences: Option<String>,
+    /// 故事背景
+    pub story_background: Option<String>,
+    /// 偏好更新
+    pub preference: Option<UpdatePreferenceRequest>,
+}
+
+/// 更新偏好请求
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePreferenceRequest {
+    /// 口味偏好 (0-4)
+    pub flavor: Option<i32>,
+    /// 饮食限制 (0-4)
+    pub dietary: Option<i32>,
+    /// 价格敏感度 (0-100)
+    pub price_sensitivity: Option<u32>,
+    /// 耐心值 (0-100)
+    pub patience: Option<u32>,
+    /// 喜欢的菜品类型
+    pub favorite_categories: Option<Vec<String>>,
 }
 
 /// 顾客响应
 #[derive(Debug, Serialize, ToSchema)]
 pub struct CustomerResponse {
     /// 顾客 ID
-    pub id: String,
-    /// 存档 ID
-    pub save_id: String,
-    /// 顾客类型
-    pub customer_type: String,
+    pub id: i64,
+    /// 顾客类型 (0=Normal, 1=Foodie, 2=Critic)
+    pub customer_type: i32,
     /// 顾客名称
     pub name: String,
     /// 好感度
-    pub favorability: u32,
+    pub affinity: u32,
     /// 访问次数
     pub visit_count: u32,
-    /// 上次访问时间
-    pub last_visit: String,
+    /// 故事背景
+    pub story_background: String,
     /// 偏好
-    pub preferences: String,
+    pub preference: PreferenceResponse,
+    /// 创建时间
+    pub created_at: String,
+    /// 更新时间
+    pub updated_at: String,
 }
 
 impl From<CustomerRecord> for CustomerResponse {
     fn from(customer: CustomerRecord) -> Self {
         Self {
-            id: customer.id.to_string(),
-            save_id: customer.save_id.to_string(),
-            customer_type: customer.customer_type,
+            id: customer.id,
+            customer_type: i32::from(customer.customer_type),
             name: customer.name,
-            favorability: customer.favorability,
+            affinity: customer.affinity,
             visit_count: customer.visit_count,
-            last_visit: customer.last_visit.to_rfc3339(),
-            preferences: customer.preferences,
+            story_background: customer.story_background,
+            preference: PreferenceResponse::from(customer.preference),
+            created_at: customer.created_at.to_rfc3339(),
+            updated_at: customer.updated_at.to_rfc3339(),
         }
     }
 }
@@ -73,25 +126,17 @@ pub struct CustomerListResponse {
 /// 获取顾客列表
 #[utoipa::path(
     get,
-    path = "/api/v1/saves/{save_id}/customers",
+    path = "/api/v1/customers",
     tag = "customers",
-    params(
-        ("save_id" = String, Path, description = "存档 ID")
-    ),
     responses(
         (status = 200, description = "获取顾客列表成功", body = CustomerListResponse)
     )
 )]
 pub async fn list_customers(
     State(state): State<Arc<AppState>>,
-    Path(save_id): Path<String>,
 ) -> GameResult<Json<CustomerListResponse>> {
-    let save_id = Uuid::parse_str(&save_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid UUID: {}", e),
-    })?;
-
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
-    let customers = repo.find_by_save_id(save_id).await?;
+    let customers = repo.find_recent().await?;
 
     let customer_responses: Vec<CustomerResponse> =
         customers.into_iter().map(CustomerResponse::from).collect();
@@ -105,11 +150,10 @@ pub async fn list_customers(
 /// 获取顾客详情
 #[utoipa::path(
     get,
-    path = "/api/v1/saves/{save_id}/customers/{customer_id}",
+    path = "/api/v1/customers/{customer_id}",
     tag = "customers",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
-        ("customer_id" = String, Path, description = "顾客 ID")
+        ("customer_id" = i64, Path, description = "顾客 ID")
     ),
     responses(
         (status = 200, description = "获取顾客成功", body = CustomerResponse),
@@ -118,12 +162,8 @@ pub async fn list_customers(
 )]
 pub async fn get_customer(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, customer_id)): Path<(String, String)>,
+    Path(customer_id): Path<i64>,
 ) -> GameResult<Json<CustomerResponse>> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid customer_id UUID: {}", e),
-    })?;
-
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
     let customer = repo
         .find_by_id(customer_id)
@@ -139,11 +179,10 @@ pub async fn get_customer(
 /// 更新顾客信息
 #[utoipa::path(
     patch,
-    path = "/api/v1/saves/{save_id}/customers/{customer_id}",
+    path = "/api/v1/customers/{customer_id}",
     tag = "customers",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
-        ("customer_id" = String, Path, description = "顾客 ID")
+        ("customer_id" = i64, Path, description = "顾客 ID")
     ),
     request_body = UpdateCustomerRequest,
     responses(
@@ -153,15 +192,11 @@ pub async fn get_customer(
 )]
 pub async fn update_customer(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, customer_id)): Path<(String, String)>,
+    Path(customer_id): Path<i64>,
     Json(payload): Json<UpdateCustomerRequest>,
 ) -> GameResult<()> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid customer_id UUID: {}", e),
-    })?;
-
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
-    let mut customer = repo
+    let record = repo
         .find_by_id(customer_id)
         .await?
         .ok_or_else(|| GameError::NotFound {
@@ -169,14 +204,36 @@ pub async fn update_customer(
             entity_id: customer_id.to_string(),
         })?;
 
-    if let Some(favorability) = payload.favorability {
-        customer.favorability = favorability;
+    // 构建更新后的 Customer
+    let mut customer = record.to_customer();
+
+    if let Some(affinity) = payload.affinity {
+        customer.affinity = affinity;
     }
     if let Some(visit_count) = payload.visit_count {
         customer.visit_count = visit_count;
     }
-    if let Some(preferences) = payload.preferences {
-        customer.preferences = preferences;
+    if let Some(story_background) = payload.story_background {
+        customer.story_background = story_background;
+    }
+    if let Some(pref_update) = payload.preference {
+        if let Some(flavor) = pref_update.flavor {
+            customer.preference.flavor = FlavorPreference::try_from(flavor)
+                .map_err(|e| GameError::Validation { details: e })?;
+        }
+        if let Some(dietary) = pref_update.dietary {
+            customer.preference.dietary = DietaryRestriction::try_from(dietary)
+                .map_err(|e| GameError::Validation { details: e })?;
+        }
+        if let Some(price_sensitivity) = pref_update.price_sensitivity {
+            customer.preference.price_sensitivity = price_sensitivity;
+        }
+        if let Some(patience) = pref_update.patience {
+            customer.preference.patience = patience;
+        }
+        if let Some(favorite_categories) = pref_update.favorite_categories {
+            customer.preference.favorite_categories = favorite_categories;
+        }
     }
 
     repo.update(&customer).await?;
@@ -187,11 +244,10 @@ pub async fn update_customer(
 /// 删除顾客
 #[utoipa::path(
     delete,
-    path = "/api/v1/saves/{save_id}/customers/{customer_id}",
+    path = "/api/v1/customers/{customer_id}",
     tag = "customers",
     params(
-        ("save_id" = String, Path, description = "存档 ID"),
-        ("customer_id" = String, Path, description = "顾客 ID")
+        ("customer_id" = i64, Path, description = "顾客 ID")
     ),
     responses(
         (status = 204, description = "删除成功"),
@@ -200,14 +256,105 @@ pub async fn update_customer(
 )]
 pub async fn delete_customer(
     State(state): State<Arc<AppState>>,
-    Path((_save_id, customer_id)): Path<(String, String)>,
+    Path(customer_id): Path<i64>,
 ) -> GameResult<()> {
-    let customer_id = Uuid::parse_str(&customer_id).map_err(|e| GameError::Validation {
-        details: format!("Invalid customer_id UUID: {}", e),
-    })?;
-
     let repo = CustomerRepository::new(state.db_pool.pool().clone());
     repo.delete(customer_id).await?;
 
     Ok(())
+}
+
+/// 创建顾客请求
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateCustomerRequest {
+    /// 顾客名称
+    pub name: String,
+    /// 年龄
+    pub age: Option<u32>,
+    /// 职业
+    pub occupation: Option<String>,
+    /// 顾客类型 (0=Normal, 1=Foodie, 2=Critic)
+    pub customer_type: i32,
+    /// 故事背景
+    pub story_background: Option<String>,
+    /// 偏好
+    pub preference: Option<CreatePreferenceRequest>,
+}
+
+/// 创建偏好请求
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreatePreferenceRequest {
+    /// 口味偏好 (0-4)
+    pub flavor: Option<i32>,
+    /// 饮食限制 (0-4)
+    pub dietary: Option<i32>,
+    /// 价格敏感度 (0-100)
+    pub price_sensitivity: Option<u32>,
+    /// 耐心值 (0-100)
+    pub patience: Option<u32>,
+    /// 喜欢的菜品类型
+    pub favorite_categories: Option<Vec<String>>,
+}
+
+/// 创建顾客响应
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CreateCustomerResponse {
+    /// 顾客 ID
+    pub id: i64,
+}
+
+/// 创建顾客
+#[utoipa::path(
+    post,
+    path = "/api/v1/customers",
+    tag = "customers",
+    request_body = CreateCustomerRequest,
+    responses(
+        (status = 201, description = "创建成功", body = CreateCustomerResponse)
+    )
+)]
+pub async fn create_customer(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateCustomerRequest>,
+) -> GameResult<Json<CreateCustomerResponse>> {
+    let customer_type = CustomerType::try_from(payload.customer_type)
+        .map_err(|e| GameError::Validation { details: e })?;
+
+    let mut preference = Preference::new();
+    if let Some(pref) = payload.preference {
+        if let Some(flavor) = pref.flavor {
+            preference.flavor = FlavorPreference::try_from(flavor)
+                .map_err(|e| GameError::Validation { details: e })?;
+        }
+        if let Some(dietary) = pref.dietary {
+            preference.dietary = DietaryRestriction::try_from(dietary)
+                .map_err(|e| GameError::Validation { details: e })?;
+        }
+        if let Some(price_sensitivity) = pref.price_sensitivity {
+            preference.price_sensitivity = price_sensitivity;
+        }
+        if let Some(patience) = pref.patience {
+            preference.patience = patience;
+        }
+        if let Some(favorite_categories) = pref.favorite_categories {
+            preference.favorite_categories = favorite_categories;
+        }
+    }
+
+    let customer = Customer {
+        id: 0,
+        name: payload.name,
+        age: payload.age.unwrap_or(30),
+        occupation: payload.occupation.unwrap_or_default(),
+        customer_type,
+        preference,
+        affinity: 0,
+        visit_count: 0,
+        story_background: payload.story_background.unwrap_or_default(),
+    };
+
+    let repo = CustomerRepository::new(state.db_pool.pool().clone());
+    let id = repo.create(&customer).await?;
+
+    Ok(Json(CreateCustomerResponse { id }))
 }
