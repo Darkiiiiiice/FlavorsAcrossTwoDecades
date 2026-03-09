@@ -240,7 +240,7 @@ pub struct Weather {
     /// 温度
     pub temperature: f64,
     /// 持续时间（游戏秒）
-    pub duration_hours: i64,
+    pub durations: i64,
     /// 开始时间
     pub create_at: DateTime<Utc>,
 }
@@ -254,7 +254,7 @@ impl Weather {
             weather_type,
             effect,
             temperature: temperature as f64,
-            duration_hours: 60,
+            durations: 60,
             create_at: Utc::now(),
         }
     }
@@ -273,7 +273,7 @@ impl From<DbWeather> for Weather {
             weather_type: value.r#type,
             effect: value.r#type.effect(),
             temperature: value.temperature,
-            duration_hours: value.duration,
+            durations: value.duration,
             create_at: Utc
                 .timestamp_opt(value.created_at, 0)
                 .single()
@@ -412,12 +412,6 @@ async fn generate_weather_async(
     if let Some(llm) = llm_manager {
         match generate_weather_with_llm_standalone(llm, timestamp, &history, season).await {
             Ok(result) => {
-                tracing::info!(
-                    "LLM generated weather: {:?}, temperature: {}°C for season {:?}",
-                    result.0,
-                    result.1,
-                    season
-                );
                 return result;
             }
             Err(e) => {
@@ -472,11 +466,14 @@ async fn generate_weather_with_llm_standalone(
         .iter()
         .rev()
         .take(MAX_HISTORY)
-        .enumerate()
-        .map(|(i, w)| {
+        .map(|w| {
+            let start_time = w.create_at.format("%Y-%m-%d %H:%M:%S");
+            let end_time =
+                (w.create_at + chrono::Duration::seconds(w.durations)).format("%Y-%m-%d %H:%M:%S");
             format!(
-                "{}分钟前: {}，{:.1}°C",
-                i,
+                "{} - {}: {}，{:.1}°C",
+                start_time,
+                end_time,
                 w.weather_type.name(),
                 w.temperature
             )
@@ -492,14 +489,14 @@ async fn generate_weather_with_llm_standalone(
     let system_prompt = builder.build_system_prompt();
     let user_message = builder.build_user_message();
 
-    tracing::info!("generating weather system prompt: \n{}", system_prompt);
-    tracing::info!("generating weather user prompt: \n{}", user_message);
+    tracing::debug!("generating weather system prompt: \n{}", system_prompt);
+    tracing::debug!("generating weather user prompt: \n{}", user_message);
 
     let response = llm_manager
         .generate_text(system_prompt.to_string(), user_message)
         .await?;
 
-    tracing::info!("LLM returned response for weather: \n{}", response);
+    tracing::debug!("LLM returned response for weather: \n{}", response);
 
     // 使用正则表达式解析 LLM 返回的天气类型和温度
     // 正则可以匹配 LLM 返回的多余内容，只提取关键信息
@@ -636,7 +633,7 @@ impl WeatherManager {
     }
 
     /// 更新天气（每秒调用）
-    pub async fn update_weather(&mut self, timestamp: i64) {
+    pub async fn tick(&mut self, timestamp: i64) {
         let weather_repo = WeatherRepository::new(self.db_pool.pool().clone());
         if self.history.len() == 0 {
             tracing::info!("Updating weather history from database...");
@@ -772,30 +769,5 @@ impl WeatherManager {
             season
         );
         Weather::new(weather_type, temperature)
-    }
-
-    /// 根据季节调整天气概率
-    pub fn update_weather_with_season(&mut self, season: crate::game::garden::Season) {
-        // 保存当前天气到历史
-        self.history.push(self.current_weather.clone());
-
-        if self.history.len() > 30 {
-            self.history.remove(0);
-        }
-
-        let new_weather_type = Self::generate_weather_for_season(season);
-        // 使用默认温度 20.0
-        self.current_weather = Weather::new(new_weather_type, 20.0);
-    }
-
-    /// 根据季节生成天气
-    fn generate_weather_for_season(_season: crate::game::garden::Season) -> WeatherType {
-        WeatherType::Cloudy
-    }
-
-    /// 强制设置天气
-    pub fn set_weather(&mut self, weather_type: WeatherType, temperature: f32) {
-        self.history.push(self.current_weather.clone());
-        self.current_weather = Weather::new(weather_type, temperature);
     }
 }

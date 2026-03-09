@@ -29,7 +29,7 @@ impl PandaManager {
     }
 
     /// 更新 Panda 状态（每个 tick 调用）
-    pub async fn update(&mut self) {
+    pub async fn tick(&mut self) {
         self.panda.tick().await;
     }
 }

@@ -141,6 +141,8 @@ impl Panda {
             PandaStatus::Charging => {
                 self.battery_module.set_charging(true);
             }
+            PandaStatus::RunningRestaurant => {}
+            PandaStatus::CleaningRestaurant => {}
             _ => {}
         }
 
@@ -154,7 +156,9 @@ impl Panda {
 
 #[derive(Debug, Clone)]
 pub enum PandaStatus {
-    Nothing,  // 无状态
-    Resting,  // 休息中
-    Charging, // 充电中
+    Nothing,            // 无状态
+    Resting,            // 休息中
+    Charging,           // 充电中
+    RunningRestaurant,  // 餐厅经营中
+    CleaningRestaurant, // 餐厅打扫中
 }

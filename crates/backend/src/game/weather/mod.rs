@@ -121,7 +121,7 @@ impl EnvironmentManager {
     }
 
     /// 更新环境（每天调用）
-    pub async fn update(&mut self, timestamp: i64) {
-        self.weather_manager.update_weather(timestamp).await;
+    pub async fn tick(&mut self, timestamp: i64) {
+        self.weather_manager.tick(timestamp).await;
     }
 }

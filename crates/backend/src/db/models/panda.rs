@@ -84,7 +84,6 @@ impl ModuleRecord {
             ModuleType::Memory => "memory",
             ModuleType::Sensor => "sensor",
             ModuleType::Mobility => "mobility",
-            ModuleType::Battery => "battery",
             ModuleType::Kitchen => "kitchen",
             ModuleType::Social => "social",
         };

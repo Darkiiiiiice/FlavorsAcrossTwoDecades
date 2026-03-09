@@ -6,7 +6,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::db::DbPool;
 use crate::game::EnvironmentManager;
-use crate::game::panda::PandaManager;
+use crate::game::customer::CustomerManager;
+use crate::game::panda::{PandaManager, PandaStatus};
+use crate::game::restaurant::{RestaurantManager, RestaurantStatus};
 
 use super::command::CommandQueue;
 use super::event::EventDispatcher;
@@ -22,6 +24,10 @@ pub struct GameEngine {
     environment_system: EnvironmentManager,
     /// Panda 系统
     panda_system: PandaManager,
+    /// 餐厅系统
+    restaurant_system: RestaurantManager,
+    /// 顾客系统
+    customer_system: CustomerManager,
     /// 指令队列
     command_queue: CommandQueue,
     /// 事件分发器
@@ -44,6 +50,10 @@ impl GameEngine {
             time_system: TimeSystem::new(),
             environment_system: EnvironmentManager::new(db_pool.clone(), llm_manager.clone()),
             panda_system: PandaManager::new(db_pool.clone()),
+            restaurant_system: RestaurantManager::new(db_pool.clone()),
+            customer_system: CustomerManager::new()
+                .with_db_pool(db_pool.clone())
+                .with_llm(llm_manager.clone()),
             command_queue: CommandQueue::new(delay),
             event_dispatcher: EventDispatcher::new(),
             llm_manager,
@@ -82,14 +92,23 @@ impl GameEngine {
                     let time_system = &mut self.time_system;
                     let enviroment_system = &mut self.environment_system;
                     let panda_system = &mut self.panda_system;
+                    let restaurant_system = &mut self.restaurant_system;
+                    let customer_system = &mut self.customer_system;
 
-                    tracing::info!("Tick: start_time={} timestamp={}", time_system.start_time(), time_system.current_timestamp());
+                    tracing::debug!("Tick: start_time={} timestamp={}", time_system.start_time(), time_system.current_timestamp());
                     // 1. 处理时间更新
                     time_system.tick();
                     // 2. 处理环境
-                    enviroment_system.update(time_system.current_timestamp()).await;
+                    enviroment_system.tick(time_system.current_timestamp()).await;
                     // 3. 处理 Panda
-                    panda_system.update().await;
+                    panda_system.tick().await;
+                    // 5. 处理餐厅
+                    let panda_status = panda_system.panda.status.clone();
+                    restaurant_system.tick(panda_status).await;
+                    // 6. 处理顾客
+                    let is_restaurant_open = restaurant_system.restaurant.is_open();
+                    let current_timestamp = time_system.current_timestamp();
+                    customer_system.tick(current_timestamp, is_restaurant_open).await;
                     // // 2. 处理到达的指令
                     // let arrived_commands = self.command_queue.process_arrived();
                     // for cmd in arrived_commands {

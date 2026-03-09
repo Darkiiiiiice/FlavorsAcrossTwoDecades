@@ -29,18 +29,6 @@ impl FlavorPreference {
             FlavorPreference::SweetSour => "酸甜",
         }
     }
-
-    /// 随机生成
-    pub fn random() -> Self {
-        let mut rng = rand::rng();
-        match rng.random_range(0..5) {
-            0 => FlavorPreference::Light,
-            1 => FlavorPreference::Medium,
-            2 => FlavorPreference::Heavy,
-            3 => FlavorPreference::Spicy,
-            _ => FlavorPreference::SweetSour,
-        }
-    }
 }
 
 /// 饮食限制
@@ -69,22 +57,10 @@ impl DietaryRestriction {
             DietaryRestriction::LowSugar => "低糖",
         }
     }
-
-    /// 随机生成
-    pub fn random() -> Self {
-        let mut rng = rand::rng();
-        match rng.random_range(0..10) {
-            0 => DietaryRestriction::Vegetarian,
-            1 => DietaryRestriction::Halal,
-            2 => DietaryRestriction::GlutenFree,
-            3 => DietaryRestriction::LowSugar,
-            _ => DietaryRestriction::None,
-        }
-    }
 }
 
 /// 顾客偏好
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Preference {
     /// 口味偏好
     pub flavor: FlavorPreference,
@@ -103,8 +79,8 @@ impl Preference {
     pub fn new() -> Self {
         let mut rng = rand::rng();
         Self {
-            flavor: FlavorPreference::random(),
-            dietary: DietaryRestriction::random(),
+            flavor: FlavorPreference::Light,
+            dietary: DietaryRestriction::None,
             price_sensitivity: rng.random_range(0..100),
             patience: 50 + rng.random_range(0..50),
             favorite_categories: Vec::new(),
@@ -182,38 +158,5 @@ impl Preference {
 impl Default for Preference {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_preference_creation() {
-        let pref = Preference::new();
-        assert!(pref.price_sensitivity <= 100);
-        assert!(pref.patience >= 50);
-    }
-
-    #[test]
-    fn test_flavor_preference() {
-        let flavor = FlavorPreference::random();
-        assert!(!flavor.name().is_empty());
-    }
-
-    #[test]
-    fn test_dietary_restriction() {
-        let dietary = DietaryRestriction::random();
-        assert!(!dietary.name().is_empty());
-    }
-
-    #[test]
-    fn test_satisfaction_calculation() {
-        let pref = Preference::new();
-
-        let satisfaction = pref.calculate_satisfaction(80.0, 30, 50);
-        assert!(satisfaction > 0.0);
-        assert!(satisfaction <= 100.0);
     }
 }

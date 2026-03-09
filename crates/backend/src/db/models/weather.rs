@@ -41,7 +41,7 @@ impl From<crate::game::Weather> for Weather {
             id: value.id,
             r#type: value.weather_type,
             temperature: value.temperature,
-            duration: value.duration_hours,
+            duration: value.durations,
             created_at: value.create_at.timestamp(),
         }
     }

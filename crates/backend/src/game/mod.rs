@@ -9,8 +9,10 @@ pub mod garden;
 pub mod llm;
 pub mod memory;
 pub mod neighbor;
+pub mod order;
 pub mod panda;
 pub mod recipe;
+pub mod restaurant;
 pub mod shop;
 pub mod time;
 pub mod travel;
@@ -30,8 +32,7 @@ pub use achievement::{
 };
 pub use command::{Command, CommandQueue, CommandStatus};
 pub use customer::{
-    Customer, CustomerManager, CustomerType, DietaryRestriction, FlavorPreference, Order,
-    OrderItem, OrderStatus, Preference, Review, ReviewSentiment, VIPLevel, VIPStatus,
+    Customer, CustomerManager, CustomerType, DietaryRestriction, FlavorPreference, Preference,
 };
 pub use engine::GameEngine;
 pub use event::{EventDispatcher, GameEvent, GameEventType};
@@ -47,11 +48,13 @@ pub use neighbor::{
     AffinityLevel, Interaction, InteractionManager, InteractionResult, InteractionType, Neighbor,
     NeighborAbility, NeighborManager, NeighborRelation,
 };
-pub use panda::{Emotion, Module, ModuleType, Panda, PandaManager, Personality};
+pub use order::{Order, OrderItem, OrderManager, OrderStatus, Review};
+pub use panda::{Emotion, Module, ModuleType, Panda, PandaManager, PandaStatus, Personality};
 pub use recipe::{
     Experiment, ExperimentResult, ExperimentStatus, Ingredient, IngredientCategory,
     IngredientQuality, Recipe, RecipeCategory, RecipeManager, RecipeSource, RecipeStatus,
 };
+pub use restaurant::{Restaurant, RestaurantManager, RestaurantStatus};
 pub use shop::{FacilityZone, Finance, Inventory, Reputation, Shop, ZoneLevel};
 pub use time::{CommunicationDelay, TimeSystem};
 pub use travel::{
